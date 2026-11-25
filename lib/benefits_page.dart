@@ -116,6 +116,11 @@ class _BenefitsPageState extends State<BenefitsPage> {
 
   Widget _challengeCard(BuildContext context, Map<String, dynamic> item,
       {bool completed = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final titleSurface = dark ? const Color(0xFF183226) : const Color(0xFFF0FDF4);
+    final rewardColor = dark ? const Color(0xFF86EFAC) : const Color(0xFF15803D);
+    final exclusiveColor = dark ? const Color(0xFFFBBF24) : const Color(0xFFB45309);
     final config = item['config'] is Map
         ? Map<String, dynamic>.from(item['config'] as Map)
         : <String, dynamic>{};
@@ -141,25 +146,25 @@ class _BenefitsPageState extends State<BenefitsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
-          color: const Color(0xFFF0FDF4),
+          color: titleSurface,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           child: Row(children: [
-            const Icon(Icons.emoji_events_outlined, color: Color(0xFF15803D), size: 20),
+            Icon(Icons.emoji_events_outlined, color: rewardColor, size: 20),
             const SizedBox(width: 9),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: scheme.onSurface)),
               if ((item['description']?.toString().trim() ?? '').isNotEmpty)
                 Text(item['description'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF667085))),
+                    style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
             ])),
-            Text(period, style: const TextStyle(fontSize: 10, color: Color(0xFF15803D), fontWeight: FontWeight.w800)),
+            Text(period, style: TextStyle(fontSize: 10, color: rewardColor, fontWeight: FontWeight.w800)),
           ]),
         ),
         Padding(
@@ -167,39 +172,39 @@ class _BenefitsPageState extends State<BenefitsPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Expanded(child: Row(children: [
-                const Icon(Icons.flag_outlined, size: 15, color: Color(0xFF667085)),
+                Icon(Icons.flag_outlined, size: 15, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 5),
-                Text('${goal.toInt()} viajes', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                Text('${goal.toInt()} viajes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: scheme.onSurface)),
               ])),
               Expanded(child: Row(children: [
-                const Icon(Icons.card_giftcard_outlined, size: 15, color: Color(0xFF15803D)),
+                Icon(Icons.card_giftcard_outlined, size: 15, color: rewardColor),
                 const SizedBox(width: 5),
                 Expanded(child: Text(reward, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF15803D), fontWeight: FontWeight.w700))),
+                    style: TextStyle(fontSize: 11, color: rewardColor, fontWeight: FontWeight.w700))),
               ])),
             ]),
             const SizedBox(height: 9),
             Row(children: [
-              const Icon(Icons.calendar_month_outlined, size: 14, color: Color(0xFF667085)),
+              Icon(Icons.calendar_month_outlined, size: 14, color: scheme.onSurfaceVariant),
               const SizedBox(width: 5),
               Expanded(child: Text(startsAt == null && endsAt == null
                   ? 'Periodo: $period'
                   : '${startsAt == null ? 'Inicio activo' : _challengeDate(startsAt)} – ${endsAt == null ? 'Sin fecha de fin' : _challengeDate(endsAt)}',
-                  style: const TextStyle(fontSize: 10, color: Color(0xFF667085)))),
-              if (exclusive) const Text('★ Reto exclusivo', style: TextStyle(fontSize: 10, color: Color(0xFFB45309), fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant))),
+              if (exclusive) Text('★ Reto exclusivo', style: TextStyle(fontSize: 10, color: exclusiveColor, fontWeight: FontWeight.w700)),
             ]),
             if (isEnrolled || completed) ...[
               const SizedBox(height: 11),
               Row(children: [
                 Expanded(child: Text(completed ? 'Reto completado' : '$progress de ${goal.toInt()} viajes',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: scheme.onSurface))),
                 Text('${(progressValue * 100).round()}%', style: const TextStyle(fontSize: 11, color: Color(0xFF1769E0), fontWeight: FontWeight.w800)),
               ]),
               const SizedBox(height: 5),
               ClipRRect(borderRadius: BorderRadius.circular(8), child: LinearProgressIndicator(value: completed ? 1.0 : progressValue, minHeight: 7)),
               const SizedBox(height: 7),
               Text(completed ? 'La recompensa se procesa según las reglas del reto.' : 'Faltan ${(goalValue - progress).ceil().clamp(0, 999999)} viajes para completar',
-                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Color(0xFF667085))),
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
             ] else ...[
               const SizedBox(height: 10),
               SizedBox(
@@ -220,6 +225,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
 
   Widget _driverChallenges(BuildContext context, List<Map<String, dynamic>> items,
       List<Map<String, dynamic>> history, Map<String, dynamic> data) {
+    final scheme = Theme.of(context).colorScheme;
     final challenges = items.where((item) => item['type'] == 'driver_challenge').toList();
     final available = challenges.where((item) {
       final challenge = item['challenge'];
@@ -255,7 +261,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
       onRefresh: () async => _refresh(),
       child: ListView(padding: const EdgeInsets.fromLTRB(0, 0, 0, 18), children: [
         Container(
-          color: Colors.white,
+          color: scheme.surface,
           child: Row(children: [
             for (final tab in const [('available', 'Disponibles'), ('mine', 'Mis Retos'), ('history', 'Historial')])
               Expanded(child: InkWell(
@@ -263,8 +269,8 @@ class _BenefitsPageState extends State<BenefitsPage> {
                 child: Container(
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _challengeTab == tab.$1 ? const Color(0xFF1769E0) : Colors.transparent, width: 2))),
-                  child: Text(tab.$2, style: TextStyle(fontSize: 12, fontWeight: _challengeTab == tab.$1 ? FontWeight.w800 : FontWeight.w600, color: _challengeTab == tab.$1 ? const Color(0xFF1769E0) : const Color(0xFF667085))),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _challengeTab == tab.$1 ? scheme.primary : Colors.transparent, width: 2))),
+                  child: Text(tab.$2, style: TextStyle(fontSize: 12, fontWeight: _challengeTab == tab.$1 ? FontWeight.w800 : FontWeight.w600, color: _challengeTab == tab.$1 ? scheme.primary : scheme.onSurfaceVariant)),
                 ),
               )),
           ]),
@@ -281,7 +287,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
           Padding(padding: const EdgeInsets.all(24), child: Center(child: Text(
             _challengeTab == 'available' ? 'No hay retos disponibles en este momento.' :
             _challengeTab == 'mine' ? 'Todavía no te has inscrito en un reto.' : 'Todavía no hay retos completados.',
-            textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF667085)),
+            textAlign: TextAlign.center, style: TextStyle(color: scheme.onSurfaceVariant),
           )))
         else
           ...rows.map((item) => Padding(
