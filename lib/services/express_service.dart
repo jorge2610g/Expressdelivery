@@ -84,6 +84,15 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  /// Nivel del conductor (Inicio, Pro, Élite) con sus métricas de los últimos días y lo que le falta para subir.
+  Future<Map<String, dynamic>> myDriverLevel() async {
+    final row = await supabase.rpc(
+      'my_driver_level_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    return row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> myDriverPrioritySummary() async {
     final row = await supabase.rpc(
       'my_driver_priority_summary',

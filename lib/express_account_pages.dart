@@ -17,6 +17,7 @@ import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
 import 'driver_registration_status_watcher.dart';
+import 'driver_level_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
@@ -3363,11 +3364,11 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.military_tech_outlined,
-                      title: 'Mi prioridad',
+                      title: 'Mi nivel',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => DriverPriorityPage(
+                          builder: (_) => DriverLevelPage(
                             service: widget.service,
                           ),
                         ),
