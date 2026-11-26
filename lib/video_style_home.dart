@@ -3787,15 +3787,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       fareQuote = const <String, dynamic>{};
     });
     try {
-      final quote = origin == null
-          ? await widget.service.quoteFare(
-              serviceKey: serviceKey,
+      // Envíos: usan su propia tarifa («parcel») y no la del vehículo, para no
+      // mezclar precios con los viajes. Si la zona no tiene tarifa de envíos,
+      // se usa la del vehículo como hasta ahora.
+      Future<Map<String, dynamic>> quoteWith(String key) => origin == null
+          ? widget.service.quoteFare(
+              serviceKey: key,
               distanceKm: distance,
               durationMinutes: duration,
               previewDemand: expressPreviewDemandMode,
             )
-          : await widget.service.quoteServiceFareForLocation(
-              serviceKey: serviceKey,
+          : widget.service.quoteServiceFareForLocation(
+              serviceKey: key,
               distanceKm: distance,
               durationMinutes: duration,
               latitude: origin.latitude,
@@ -3803,12 +3806,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               destinationLatitude: destination?.latitude,
               destinationLongitude: destination?.longitude,
             );
+      var quoteKey = serviceKey;
+      Map<String, dynamic> quote;
+      if (serviceType == 'delivery') {
+        try {
+          quote = await quoteWith('parcel');
+          if (!passengerRideFareIsReady(quote)) {
+            quote = await quoteWith(serviceKey);
+          } else {
+            quoteKey = 'parcel';
+          }
+        } catch (_) {
+          quote = await quoteWith(serviceKey);
+        }
+      } else {
+        quote = await quoteWith(serviceKey);
+      }
 
       var altQuote = const <String, dynamic>{};
       if (origin != null && quote['price_mode']?.toString() == 'both') {
         try {
           altQuote = await widget.service.quoteServiceFareForLocation(
-            serviceKey: serviceKey,
+            serviceKey: quoteKey,
             distanceKm: distance,
             durationMinutes: duration,
             latitude: origin.latitude,
@@ -5866,9 +5885,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       // No new page, pickup or route recalculation: Taxi and
                       // Envíos use the same route, fare and offer engine.
                       if (value == 'delivery' && !parcelAvailable) return;
+                      final changed = serviceType != value;
                       setState(() {
                         serviceType = value;
+                        // Envíos y viajes tienen tarifas distintas: se vuelve a cotizar.
+                        if (changed && routeConfirmed) {
+                          fareManuallyEdited = false;
+                          fareQuote = const <String, dynamic>{};
+                          quoting = true;
+                          ++fareQuoteEpoch;
+                        }
                       });
+                      if (changed && routeConfirmed) {
+                        unawaited(_refreshFareQuote());
+                      }
                     },
                     onCategory: (value) {
                       if (category == value) return;
