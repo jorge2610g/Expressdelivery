@@ -3809,12 +3809,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       var quoteKey = serviceKey;
       Map<String, dynamic> quote;
       if (serviceType == 'delivery') {
+        // Cada vehículo de envío (moto, auto, carga) tiene su propia tarifa;
+        // el servidor usa la general de Envíos si ese vehículo no tiene una.
+        final parcelKey = (parcelKind == null || parcelKind!.isEmpty)
+            ? 'parcel'
+            : 'parcel_$parcelKind';
         try {
-          quote = await quoteWith('parcel');
+          quote = await quoteWith(parcelKey);
           if (!passengerRideFareIsReady(quote)) {
             quote = await quoteWith(serviceKey);
           } else {
-            quoteKey = 'parcel';
+            quoteKey = parcelKey;
           }
         } catch (_) {
           quote = await quoteWith(serviceKey);
@@ -5835,7 +5840,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     serviceType: serviceType,
                     parcelAvailable: parcelAvailable,
                     parcelKind: parcelKind,
-                    onParcelKind: (kind) => setState(() => parcelKind = kind),
+                    onParcelKind: (kind) {
+                      final changed = parcelKind != kind;
+                      setState(() {
+                        parcelKind = kind;
+                        if (changed && routeConfirmed) {
+                          fareManuallyEdited = false;
+                          fareQuote = const <String, dynamic>{};
+                          quoting = true;
+                          ++fareQuoteEpoch;
+                        }
+                      });
+                      if (changed && routeConfirmed) {
+                        unawaited(_refreshFareQuote());
+                      }
+                    },
                     parcelSenderName: parcelSenderName,
                     parcelSenderPhone: parcelSenderPhone,
                     parcelRecipientName: parcelRecipientName,
