@@ -5,7 +5,7 @@ import 'driver_priority_page.dart';
 import 'services/express_service.dart';
 
 /// «Mi nivel»: Inicio, Pro o Élite según los últimos 30 días, y lo que falta para subir.
-/// Por ahora solo informa: no cambia quién recibe las solicitudes.
+/// El nivel pesa en quién recibe primero los avisos de precio fijo y en el orden de la lista de solicitudes.
 
 const _levelColors = {
   'inicio': Color(0xFF667085),
@@ -176,9 +176,10 @@ class _DriverLevelPageState extends State<DriverLevelPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  'Tu nivel se calcula cada día con los últimos $days días. Responder a las solicitudes que ves, '
+                  'Tu nivel se calcula con los últimos $days días. Responder a las solicitudes que ves, '
                   'cancelar poco y mantener una buena calificación te ayuda a subir. '
-                  'Por ahora tu nivel te muestra cómo vas; los beneficios de cada nivel se irán activando.',
+                  'Con nivel Élite o Pro recibes primero los avisos de viajes de precio fijo entre los conductores '
+                  'que están casi igual de cerca del pasajero, y tu lista de solicitudes se ordena a tu favor.',
                   style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
                 ),
               ),
