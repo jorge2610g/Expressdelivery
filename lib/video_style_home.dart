@@ -18356,7 +18356,12 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                         '★ $rating' +
                             (completedTrips > 0
                                 ? ' · $completedTrips viajes'
-                                : ''),
+                                : '') +
+                            (driverProfile?['driver_level'] == 'elite'
+                                ? ' · Élite'
+                                : driverProfile?['driver_level'] == 'pro'
+                                    ? ' · Pro'
+                                    : ''),
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
