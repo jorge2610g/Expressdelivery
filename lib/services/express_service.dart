@@ -349,6 +349,54 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  /// ¿Esta cuenta debe verificar su teléfono por SMS? Falla en abierto:
+  /// ante cualquier error nunca se bloquea a la persona.
+  Future<Map<String, dynamic>> phoneSignupVerification() async {
+    try {
+      final value = await supabase.rpc('phone_signup_verification_v1');
+      return value is Map
+          ? Map<String, dynamic>.from(value)
+          : <String, dynamic>{'required': false};
+    } catch (_) {
+      return <String, dynamic>{'required': false};
+    }
+  }
+
+  /// Llama a phone-otp (acción «send» o «verify»). Devuelve siempre un mapa
+  /// con `ok` y, si falló, `code` y `message` en español.
+  Future<Map<String, dynamic>> phoneOtp(
+    String action, {
+    required String phone,
+    String? code,
+  }) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'phone-otp',
+        body: {
+          'action': action,
+          'phone': phone,
+          if (code != null) 'code': code,
+        },
+      );
+      final row = response.data;
+      return row is Map
+          ? Map<String, dynamic>.from(row)
+          : <String, dynamic>{'ok': false, 'message': 'Respuesta inválida'};
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map) return Map<String, dynamic>.from(details);
+      return <String, dynamic>{
+        'ok': false,
+        'message': 'No se pudo completar la verificación',
+      };
+    } catch (_) {
+      return <String, dynamic>{
+        'ok': false,
+        'message': 'Revisa tu conexión e inténtalo de nuevo',
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> marketplaceCreateOnlinePayment(
     String orderId,
   ) async {

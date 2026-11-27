@@ -11,6 +11,7 @@ import 'core/runtime_channel.dart';
 import 'express_splash.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
+import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
 class ConnectedAppShell extends StatefulWidget {
@@ -30,6 +31,9 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   double? initialPassengerLatitude;
   double? initialPassengerLongitude;
   bool passengerLandingRefreshInFlight = false;
+  // Verificación por SMS (solo cuentas nuevas de Bolivia, si el servidor la pide).
+  bool phoneVerificationRequired = false;
+  String? phoneVerificationPhone;
 
   @override
   void initState() {
@@ -283,6 +287,10 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     if (account != null) {
       // The map has a safe fallback; quota refresh must not hold the shell.
       unawaited(ExpressMapProvider.initializeQuotaGuard().catchError((_) {}));
+      // Falla en abierto: ante cualquier error no se bloquea a nadie.
+      final sms = await service.phoneSignupVerification();
+      phoneVerificationRequired = sms['required'] == true;
+      phoneVerificationPhone = sms['phone']?.toString();
     }
 
     if (account != null &&
@@ -453,6 +461,17 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         final activeMode =
             snapshot.data!['active_mode']?.toString() ?? 'passenger';
 
+        if (phoneVerificationRequired) {
+          return PhoneVerificationGate(
+            service: service,
+            phone: phoneVerificationPhone,
+            onSignOut: widget.onExit,
+            onVerified: _retryBootstrap,
+            // Si el proveedor de SMS falla no se deja a nadie sin entrar.
+            onSkip: () => setState(() => phoneVerificationRequired = false),
+          );
+        }
+
         return ConnectedExperience(
           onExit: widget.onExit,
           initialMode: activeMode,
@@ -464,4 +483,56 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
       },
     );
   }
+}
+
+/// Pantalla intermedia: abre la verificación y, al terminar, reinicia el arranque.
+class PhoneVerificationGate extends StatefulWidget {
+  final ExpressService service;
+  final String? phone;
+  final VoidCallback onSignOut;
+  final VoidCallback onVerified;
+  final VoidCallback onSkip;
+
+  const PhoneVerificationGate({
+    super.key,
+    required this.service,
+    required this.phone,
+    required this.onSignOut,
+    required this.onVerified,
+    required this.onSkip,
+  });
+
+  @override
+  State<PhoneVerificationGate> createState() => _PhoneVerificationGateState();
+}
+
+class _PhoneVerificationGateState extends State<PhoneVerificationGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _open());
+  }
+
+  Future<void> _open() async {
+    if (!mounted) return;
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PhoneVerificationPage(
+          service: widget.service,
+          initialPhone: widget.phone,
+          onSignOut: widget.onSignOut,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (ok == true) {
+      widget.onVerified();
+    } else if (ok == false) {
+      widget.onSkip();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
 }
