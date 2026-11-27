@@ -9866,7 +9866,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     unawaited(_loadFloatingOfferAdminFlag());
     _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
-    final requestCount = next.rides.length + next.deliveries.length;
+    final requestCount =
+        _listableRides(next.rides).length + next.deliveries.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.onRequestCountChanged?.call(requestCount);
@@ -12501,6 +12502,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
                         _quickOfferRide(driverPopupRide!, amount),
                     onAccept: () =>
                         _acceptRideFromPopup(driverPopupRide!),
+                    // Precio fijo: al terminar el turno la ventana se cierra sola,
+                    // aunque se haya abierto sin el temporizador automático.
+                    onExpired: driverPopupRide['dispatch_style'] == 'sequential'
+                        ? () {
+                            final expiredId =
+                                driverPopupRide!['id']?.toString() ?? '';
+                            if (driverRequestPopupId != expiredId) return;
+                            _dropUnavailableRide(expiredId);
+                            _closeDriverRequestPopup(showNext: true);
+                          }
+                        : null,
                   ),
                 ),
               if (driverPopupDelivery != null)
@@ -12590,7 +12602,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                             transitionBusy: busy,
                             current: current,
                             onToggle: () => _toggleOnline(data.profile),
-                            onRequests: () => _showDriverRequests(data.rides, data.deliveries),
+                            onRequests: () => _showDriverRequests(_listableRides(data.rides), data.deliveries),
                             onDelivery: _claimDelivery,
                             onTripTracking: _openTripInWaze,
                             onDeliveryTracking: _openDeliveryTracking,
@@ -12742,6 +12754,7 @@ class _DriverRequestPopup extends StatelessWidget {
   final VoidCallback onAccept;
   /// Fin de la ventana automática de una oferta (15 s). Null si se abrió a mano.
   final DateTime? windowDeadline;
+  final VoidCallback? onExpired;
 
   const _DriverRequestPopup({
     required this.ride,
@@ -12753,6 +12766,7 @@ class _DriverRequestPopup extends StatelessWidget {
     required this.onQuickOffer,
     required this.onAccept,
     this.windowDeadline,
+    this.onExpired,
   });
 
   @override
@@ -12924,6 +12938,7 @@ class _DriverRequestPopup extends StatelessWidget {
                           shortWindow: !sequentialFixed &&
                               automatic &&
                               windowDeadline != null,
+                          onExpired: onExpired,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -13077,6 +13092,11 @@ class _DriverRequestPopup extends StatelessWidget {
 /// Segundos que la ventana de una oferta (viaje, envío o pedido) permanece a la
 /// vista del conductor. El precio fijo usa el turno que fija el servidor (15 s).
 const int _driverOfferPopupSeconds = 15;
+/// Solicitudes que se listan en «Solicitudes»: las de precio fijo (asignación uno
+/// a uno) solo llegan como ventana emergente al conductor al que le toca su
+/// turno; nunca se listan para volver a abrirlas.
+List<Map<String, dynamic>> _listableRides(List<Map<String, dynamic>> rides) =>
+    rides.where((ride) => ride['dispatch_style'] != 'sequential').toList();
 
 /// Anillo con la cuenta atrás de una solicitud. En precio fijo es el turno del
 /// conductor (rojo); en ofertas es el tiempo que queda a la solicitud (ámbar,
@@ -13087,11 +13107,13 @@ class _RequestCountdownRing extends StatefulWidget {
   final bool fixedTurn;
   /// Ventana corta (segundos): muestra segundos y pasa a rojo al final.
   final bool shortWindow;
+  final VoidCallback? onExpired;
 
   const _RequestCountdownRing({
     required this.deadline,
     required this.fixedTurn,
     this.shortWindow = false,
+    this.onExpired,
   });
 
   @override
@@ -13102,6 +13124,7 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
   Timer? _timer;
   late int _total;
   late int _left;
+  bool _expiredNotified = false;
 
   int _remaining() {
     final deadline = widget.deadline;
@@ -13120,6 +13143,11 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
       if (!mounted) return;
       final next = _remaining();
       if (next != _left) setState(() => _left = next);
+      // Al terminar el turno el aviso se cierra solo.
+      if (next <= 0 && widget.fixedTurn && !_expiredNotified) {
+        _expiredNotified = true;
+        widget.onExpired?.call();
+      }
     });
   }
 
@@ -13631,18 +13659,18 @@ class _DriverBottomPanel extends StatelessWidget {
           ),
         ] else ...[
           _DriverRequestsButton(
-            count: data.rides.length + data.deliveries.length,
+            count: _listableRides(data.rides).length + data.deliveries.length,
             onTap: onRequests,
           ),
           const SizedBox(height: 10),
-          if (data.rides.isEmpty && data.deliveries.isEmpty)
+          if (_listableRides(data.rides).isEmpty && data.deliveries.isEmpty)
             const _NoticeCard(
               icon: Icons.radar_rounded,
               title: 'Esperando solicitudes…',
               subtitle:
                   'Cuando llegue un viaje o una entrega aparecerá aquí automáticamente.',
             )
-          else if (data.rides.isNotEmpty)
+          else if (_listableRides(data.rides).isNotEmpty)
             const _NoticeCard(
               icon: Icons.notifications_active_outlined,
               title: 'Buscando viajes cerca',
