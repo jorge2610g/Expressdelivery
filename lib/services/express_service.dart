@@ -1606,7 +1606,11 @@ class ExpressService {
         return true;
       }
 
-      if (vehicleType == 'motorcycle') return category == 'motorcycle';
+      // El servidor decide si el conductor puede tomar Moto Confort (modo y
+      // horario); aquí solo se deja pasar para no ocultar sus solicitudes.
+      if (vehicleType == 'motorcycle') {
+        return category == 'motorcycle' || category == 'motorcycle_comfort';
+      }
       if (vehicleType == 'xl') {
         return category == 'xl' ||
             category == 'economy' ||
