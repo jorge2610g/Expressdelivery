@@ -844,7 +844,43 @@ class ExpressService {
   /// Guarda nombre/teléfono/foto. Un conductor aprobado no edita estos datos
   /// directamente: se envía una solicitud que la administración aprueba.
   /// Devuelve `true` si el cambio se aplicó y `false` si quedó pendiente de aprobación.
+  /// ¿Ese teléfono ya pertenece a otra cuenta? Falla en abierto: el servidor
+  /// vuelve a comprobarlo al guardar.
+  Future<bool> phoneIsRegistered(String phone) async {
+    try {
+      final value = await supabase
+          .rpc('phone_is_registered_v1', params: {'p_phone': phone});
+      return value == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> updateProfile({
+    String? fullName,
+    String? phone,
+    String? avatarUrl,
+  }) async {
+    if (phone != null && await phoneIsRegistered(phone)) {
+      throw const PhoneAlreadyRegisteredException();
+    }
+    try {
+      return await _updateProfileUnchecked(
+        fullName: fullName,
+        phone: phone,
+        avatarUrl: avatarUrl,
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '23505' ||
+          (e.hint ?? '') == 'phone_already_registered' ||
+          e.message.contains('ya está registrado')) {
+        throw const PhoneAlreadyRegisteredException();
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> _updateProfileUnchecked({
     String? fullName,
     String? phone,
     String? avatarUrl,
@@ -3167,4 +3203,17 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+}
+
+
+/// El teléfono ya está registrado en otra cuenta.
+class PhoneAlreadyRegisteredException implements Exception {
+  const PhoneAlreadyRegisteredException();
+
+  static const String message =
+      'Este número de teléfono ya está registrado en otra cuenta. '
+      'Usa otro número o entra con tu cuenta existente.';
+
+  @override
+  String toString() => message;
 }

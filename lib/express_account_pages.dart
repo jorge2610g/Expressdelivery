@@ -3098,6 +3098,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content:Text('Solicitud enviada. Se aplicará cuando la administración la apruebe.')));
       }
+    } on PhoneAlreadyRegisteredException {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text(PhoneAlreadyRegisteredException.message)));
     } catch (_) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('No se pudo guardar tu perfil.')));

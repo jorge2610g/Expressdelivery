@@ -375,6 +375,21 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           _message('Ingresa un número de teléfono válido.');
           return;
         }
+        // Un teléfono solo puede pertenecer a una cuenta. Si la consulta falla
+        // se sigue adelante: el servidor lo vuelve a comprobar.
+        var phoneTaken = false;
+        try {
+          final taken = await supabase
+              .rpc('phone_is_registered_v1', params: {'p_phone': normalizedPhone});
+          phoneTaken = taken == true;
+        } catch (_) {}
+        if (phoneTaken) {
+          _message(
+            'Este número de teléfono ya está registrado en otra cuenta. '
+            'Usa otro número o inicia sesión con tu cuenta existente.',
+          );
+          return;
+        }
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
@@ -418,11 +433,21 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         }
       }
     } on AuthException catch (e) {
-      _message(
-        e.code == 'email_not_confirmed'
-            ? 'Confirma tu correo antes de iniciar sesión.'
-            : 'No se pudo iniciar sesión. Revisa tus datos e intenta nuevamente.',
-      );
+      if (register &&
+          (e.code == 'unexpected_failure' ||
+              e.message.toLowerCase().contains('database error'))) {
+        // El servidor rechazó el alta, normalmente por un teléfono ya usado.
+        _message(
+          'No se pudo crear la cuenta. Si tu teléfono o tu correo ya están '
+          'registrados, inicia sesión con tu cuenta existente.',
+        );
+      } else {
+        _message(
+          e.code == 'email_not_confirmed'
+              ? 'Confirma tu correo antes de iniciar sesión.'
+              : 'No se pudo iniciar sesión. Revisa tus datos e intenta nuevamente.',
+        );
+      }
     } catch (error, stack) {
       debugPrint('Express auth operation failed: $error\n$stack');
       _message('No se pudo completar la operación. Intenta nuevamente.');
