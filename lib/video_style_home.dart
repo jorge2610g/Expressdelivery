@@ -9301,6 +9301,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
               'ride_assigned',
             };
             if (refreshTypes.contains(payload.newRecord['type']?.toString())) {
+              // Precio fijo: la ventana del conductor de turno es corta, así
+              // que el popup se abre con solo la lista de solicitudes y la
+              // carga completa de la pantalla llega después.
+              final meta = payload.newRecord['metadata'];
+              if (payload.newRecord['type']?.toString() == 'ride_request' &&
+                  meta is Map &&
+                  meta['dispatch_style']?.toString() == 'sequential') {
+                unawaited(_openFixedOfferFast());
+              }
               _refreshDriverHome();
             }
           },
@@ -9396,6 +9405,42 @@ class _DriverMapHomeState extends State<DriverMapHome>
   // descartaba y la pantalla esperaba al respaldo (hasta 30 s): ahora se
   // repite una vez apenas termina el actual.
   bool driverRefreshQueued = false;
+
+  /// Abre cuanto antes el popup de una solicitud de precio fijo: pide solo
+  /// las solicitudes disponibles y reutiliza el resto de la pantalla en caché.
+  Future<void> _openFixedOfferFast() async {
+    final base = cachedData;
+    if (!mounted ||
+        base == null ||
+        base.activeTrip != null ||
+        base.activeDelivery != null ||
+        base.profile['online_status'] != 'online') return;
+    try {
+      final available = await widget.service.availableRideRequests();
+      if (!mounted || driverRequestPopupId != null) return;
+      final rides = available.where((job) {
+        final key = job['service_mode'] == 'parcel' ? 'parcel' : 'ride';
+        return driverApprovedWorkKeys.contains(key);
+      }).toList();
+      if (!rides.any((r) =>
+          r['dispatch_style'] == 'sequential' &&
+          r['fixed_attempt_expires_at'] != null)) return;
+      final next = _DriverStateData(
+        service: base.service,
+        profile: base.profile,
+        rides: rides,
+        deliveries: base.deliveries,
+        activeTrip: base.activeTrip,
+        activeDelivery: base.activeDelivery,
+        counterpart: base.counterpart,
+        pendingRating: base.pendingRating,
+      );
+      cachedData = next;
+      _syncDriverRequestPopup(next);
+    } catch (_) {
+      // La carga completa de la pantalla sigue en marcha como respaldo.
+    }
+  }
 
   void _refreshDriverHome() {
     if (!mounted) return;
