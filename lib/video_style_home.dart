@@ -8684,6 +8684,64 @@ class _DriverMapHomeState extends State<DriverMapHome>
   double driverMapZoom = 15.0;
   bool busy = false;
   bool driverRefreshInFlight = false;
+
+  // Modo de moto del conductor (Económico / Confort).
+  Map<String, dynamic> motoModeStatus = const {};
+  DateTime? motoModeCheckedAt;
+  DateTime? motoModeEndedBannerUntil;
+
+  bool get _motoModeVisible =>
+      motoModeStatus['has_motorcycle'] == true &&
+      motoModeStatus['zone_enabled'] == true;
+
+  Future<void> _refreshMotoMode({bool force = false}) async {
+    final last = motoModeCheckedAt;
+    if (!force &&
+        last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 45)) {
+      return;
+    }
+    motoModeCheckedAt = DateTime.now();
+    try {
+      final raw = await supabase.rpc('driver_moto_mode_status_v1');
+      if (raw is! Map || !mounted) return;
+      var status = Map<String, dynamic>.from(raw);
+      // Terminó el horario de Moto Confort: pasa solo a Económico sin
+      // desconectarlo y se lo avisamos.
+      if (status['mode'] == 'comfort' && status['window_open'] != true) {
+        try {
+          final next = await supabase.rpc('driver_set_moto_mode_v1',
+              params: {'p_mode': 'economy', 'p_accept': false});
+          if (next is Map) status = Map<String, dynamic>.from(next);
+          motoModeEndedBannerUntil =
+              DateTime.now().add(const Duration(seconds: 20));
+          Future<void>.delayed(const Duration(seconds: 21), () {
+            if (mounted) setState(() {});
+          });
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() => motoModeStatus = status);
+    } catch (_) {
+      // Sin conexión o sin modo de moto: la etiqueta simplemente no se muestra.
+    }
+  }
+
+  Future<void> _onMotoModePillTap() async {
+    if (motoModeStatus['can_choose'] != true) {
+      final blocked = motoModeStatus['blocked'] == true;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(blocked
+              ? 'Moto Confort está inhabilitado para tu cuenta.'
+              : 'Moto Confort está disponible de 6:00 a 18:00.'),
+        ));
+      return;
+    }
+    await _chooseMotoMode();
+    await _refreshMotoMode(force: true);
+  }
   bool driverPriorityEnforced = false;
   Map<String, dynamic> driverPrioritySummary = const {};
   _DriverStateData? cachedData;
@@ -9977,6 +10035,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       }
     });
     _syncDriverRequestPopup(next);
+    if (profile['online_status'] == 'online') unawaited(_refreshMotoMode());
     return next;
   }
 
@@ -10221,6 +10280,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       }
       return false;
     }
+    unawaited(_refreshMotoMode(force: true));
     return true;
   }
 
@@ -12627,12 +12687,46 @@ class _DriverMapHomeState extends State<DriverMapHome>
                           driverOfferPendingRideId != null) {
                         return const SizedBox.shrink();
                       }
+                      final showMotoMode = _motoModeVisible &&
+                          data != null &&
+                          data.profile['online_status'] == 'online';
                       return SizedBox(
-                        height: 72,
+                        height: showMotoMode ? 104 : 72,
                         child: Stack(
                           clipBehavior: Clip.none,
                           alignment: Alignment.topCenter,
                           children: [
+                            if (showMotoMode)
+                              Positioned(
+                                top: 56,
+                                right: 0,
+                                child: _MotoModePill(
+                                  comfort: motoModeStatus['mode'] == 'comfort',
+                                  onTap: _onMotoModePillTap,
+                                ),
+                              ),
+                            if (showMotoMode &&
+                                motoModeEndedBannerUntil != null &&
+                                DateTime.now().isBefore(motoModeEndedBannerUntil!))
+                              Positioned(
+                                top: 92,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xF2161616),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Text(
+                                    'Terminó el horario de Moto Confort. Sigues en '
+                                    'línea como Moto Económico. Mañana desde las '
+                                    '6:00 puedes volver a Confort.',
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 12),
+                                  ),
+                                ),
+                              ),
                             Align(
                               alignment: Alignment.topLeft,
                               child: _CircleButton(
@@ -19744,6 +19838,52 @@ class _CircleButton extends StatelessWidget {
                         : expressDark,
                   ),
           ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Etiqueta con el modo de moto del conductor: Confort (azul, con sombrilla) o
+/// Económico (dorada). Al tocarla se puede cambiar de modo.
+class _MotoModePill extends StatelessWidget {
+  final bool comfort;
+  final VoidCallback onTap;
+
+  const _MotoModePill({required this.comfort, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = comfort ? const Color(0xFF2E90FA) : const Color(0xFFF5C451);
+    final fg = comfort ? Colors.white : const Color(0xFF3A2A00);
+    return Material(
+      elevation: 4,
+      color: bg,
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                comfort ? Icons.beach_access_rounded : Icons.two_wheeler_rounded,
+                size: 16,
+                color: fg,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                comfort ? 'Modo Confort' : 'Modo Económico',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
         ),
       ),
