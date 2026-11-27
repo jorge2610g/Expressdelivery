@@ -12728,86 +12728,6 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
   }
 }
 
-/// Pasajero de la solicitud: foto (o inicial), primer nombre y calificación.
-/// Nunca muestra teléfono; el backend tampoco lo envía antes del viaje activo.
-class _DriverPassengerRow extends StatelessWidget {
-  final DriverRequestPassenger passenger;
-  final bool dark;
-
-  const _DriverPassengerRow({required this.passenger, required this.dark});
-
-  Widget _initialAvatar() => ColoredBox(
-        color: const Color(0xFFDCE7FF),
-        child: Center(
-          child: Text(
-            passenger.displayName.substring(0, 1).toUpperCase(),
-            style: const TextStyle(
-              color: expressBlue,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
-          ),
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final avatarUrl = passenger.avatarUrl;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _riderBorder(context)),
-      ),
-      child: Row(
-        children: [
-          ClipOval(
-            child: SizedBox(
-              width: 38,
-              height: 38,
-              child: avatarUrl == null
-                  ? _initialAvatar()
-                  : Image.network(
-                      avatarUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _initialAvatar(),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pasajero · ${passenger.displayName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _riderText(context),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  passenger.ratingLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _riderMuted(context),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _DriverRequestPopup extends StatelessWidget {
   final Map<String, dynamic> ride;
@@ -12871,41 +12791,12 @@ class _DriverRequestPopup extends StatelessWidget {
     final steps = backendSteps is List && backendSteps.length == 3
         ? backendSteps.map((v) => asDouble(v) ?? 0).toList()
         : fallback.map((v) => v.toDouble()).toList();
-    final quick1 = fare + steps[0];
-    final quick2 = fare + steps[1];
-    final quick3 = fare + steps[2];
 
     // Pasajero visible antes de aceptar u ofertar. Restaurante/marketplace no lo muestra.
     final passenger = ride['marketplace_order_id'] == null &&
             ride['_express_delivery'] != true
         ? DriverRequestPassenger.fromRide(ride)
         : null;
-    final info = <Widget>[
-      _JobInfoPill(icon: Icons.category_outlined, label: category),
-      if (fixedCoupon)
-        _JobInfoPill(
-          icon: Icons.local_offer_outlined,
-          label: 'Viaje con precio fijo · cupón −' +
-              _rideMoney(couponDiscount, ride['currency']),
-        ),
-      if (pickupDistance != null)
-        _JobInfoPill(
-          icon: Icons.near_me_outlined,
-          label: pickupDistance < 1
-              ? '${(pickupDistance * 1000).round()} m al origen'
-              : '${pickupDistance.toStringAsFixed(1)} km al origen',
-        ),
-      if (tripKm != null)
-        _JobInfoPill(
-          icon: Icons.route_outlined,
-          label: '${tripKm.toStringAsFixed(1)} km de viaje',
-        ),
-      if (payment != null)
-        _JobInfoPill(
-          icon: Icons.payments_outlined,
-          label: _paymentLabel(payment),
-        ),
-    ];
 
     // MaterialType.transparency: un Material con color absorbe los toques de
     // toda la pantalla y el conductor no podía mover ni acercar el mapa.
@@ -13012,42 +12903,73 @@ class _DriverRequestPopup extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 8),
+                    // Cabecera: cuenta atrás, quién pide y cuánto paga.
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        _RequestCountdownRing(
+                          deadline: sequentialFixed
+                              ? DateTime.tryParse(
+                                  ride['fixed_attempt_expires_at']?.toString() ?? '')
+                              : DateTime.tryParse(
+                                  ride['expires_at']?.toString() ?? ''),
+                          fixedTurn: sequentialFixed,
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            _rideMoney(fare, ride['currency']),
-                            style: TextStyle(
-                              color: _riderText(context),
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                passenger?.displayName ?? category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _riderText(context),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Wrap(
+                                spacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (passenger != null)
+                                    Text(
+                                      passenger.ratingLabel,
+                                      style: TextStyle(
+                                        color: _riderMuted(context),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  _RequestTag(label: category),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          fixedCoupon
-                              ? 'Paga el pasajero'
+                        const SizedBox(width: 8),
+                        _RequestPriceBox(
+                          label: fixedCoupon
+                              ? 'PAGA EL PASAJERO'
                               : sequentialFixed
-                              ? 'Precio fijo'
-                              : ride['_express_delivery'] == true
-                              ? ride['marketplace_order_id'] != null
-                                  ? 'Tarifa del pedido'
-                                  : 'Tarifa del envío'
-                              : ride['service_mode'] == 'parcel'
-                                  ? 'Tarifa del envío'
-                                  : 'Tarifa del pasajero',
-                          style: TextStyle(
-                            color: _riderMuted(context),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
+                                  ? 'PRECIO FIJO'
+                                  : ride['_express_delivery'] == true
+                                      ? ride['marketplace_order_id'] != null
+                                          ? 'TARIFA DEL PEDIDO'
+                                          : 'TARIFA DEL ENVÍO'
+                                      : ride['service_mode'] == 'parcel'
+                                          ? 'TARIFA DEL ENVÍO'
+                                          : 'OFRECE',
+                          amount: _rideMoney(fare, ride['currency']),
+                          fixed: fixedCoupon || sequentialFixed,
                         ),
                       ],
                     ),
                     if (fixedCoupon) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 6),
                       Text(
                         'Tarifa total ' +
                             _rideMoney(fare + couponDiscount, ride['currency']) +
@@ -13061,22 +12983,7 @@ class _DriverRequestPopup extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (passenger != null) ...[
-                      const SizedBox(height: 7),
-                      _DriverPassengerRow(passenger: passenger, dark: dark),
-                    ],
-                    const SizedBox(height: 7),
-                    SizedBox(
-                      height: 31,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: info.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: 6),
-                        itemBuilder: (_, index) => info[index],
-                      ),
-                    ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 10),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -13103,72 +13010,48 @@ class _DriverRequestPopup extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 49,
-                      child: FilledButton(
-                        onPressed: onAccept,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: expressBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          'Aceptar por ' +
-                              _rideMoney(fare, ride['currency']),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    if (!fixedCoupon && !sequentialFixed)
                     Row(
                       children: [
-                        for (final amount in [quick1, quick2, quick3]) ...[
-                          if (amount != quick1) const SizedBox(width: 6),
-                          Expanded(
-                            child: SizedBox(
-                              height: 42,
-                              child: OutlinedButton(
-                                onPressed: ride['_express_delivery'] == true &&
-                                        ride['marketplace_order_id'] != null
-                                    ? null : () => onQuickOffer(amount),
-                                style: OutlinedButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                child: Text(
-                                  '+ ' +
-                                      _rideMoney(
-                                        amount - fare,
-                                        ride['currency'],
-                                      ),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
+                        Expanded(
+                          child: _RequestTile(
+                            label: 'VIAJE',
+                            value: tripKm == null
+                                ? '—'
+                                : '${tripKm.toStringAsFixed(1)} km',
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _RequestTile(
+                            label: 'A RECOGER',
+                            value: pickupDistance == null
+                                ? '—'
+                                : pickupDistance < 1
+                                    ? '${(pickupDistance * 1000).round()} m'
+                                    : '${pickupDistance.toStringAsFixed(1)} km',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _RequestTile(
+                            label: 'PAGO',
+                            value: payment == null ? '—' : _paymentLabel(payment),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 7),
-                    SizedBox(
-                      height: 42,
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: onClose,
-                        style: TextButton.styleFrom(
-                          foregroundColor: _riderMuted(context),
-                        ),
-                        child: Text(
-                            fixedCoupon || sequentialFixed ? 'Rechazar' : 'Ignorar oferta'),
-                      ),
+                    const SizedBox(height: 10),
+                    _RequestActions(
+                      fare: fare,
+                      steps: steps,
+                      currency: ride['currency'],
+                      showCounter: !fixedCoupon && !sequentialFixed,
+                      counterEnabled: !(ride['_express_delivery'] == true &&
+                          ride['marketplace_order_id'] != null),
+                      fixedMode: fixedCoupon || sequentialFixed,
+                      onAccept: onAccept,
+                      onQuickOffer: onQuickOffer,
+                      onClose: onClose,
                     ),
                   ],
                 ),
@@ -13177,6 +13060,319 @@ class _DriverRequestPopup extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Anillo con la cuenta atrás de una solicitud. En precio fijo es el turno del
+/// conductor (rojo); en ofertas es el tiempo que queda a la solicitud (ámbar,
+/// rojo en los últimos 30 s). Si la solicitud dura más de una hora (viaje
+/// programado) muestra «Abierta» en lugar de una cuenta atrás.
+class _RequestCountdownRing extends StatefulWidget {
+  final DateTime? deadline;
+  final bool fixedTurn;
+
+  const _RequestCountdownRing({required this.deadline, required this.fixedTurn});
+
+  @override
+  State<_RequestCountdownRing> createState() => _RequestCountdownRingState();
+}
+
+class _RequestCountdownRingState extends State<_RequestCountdownRing> {
+  Timer? _timer;
+  late int _total;
+  late int _left;
+
+  int _remaining() {
+    final deadline = widget.deadline;
+    if (deadline == null) return 0;
+    return math.max(0, deadline.toUtc().difference(DateTime.now().toUtc()).inSeconds);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _left = _remaining();
+    _total = widget.fixedTurn ? math.max(15, _left) : math.max(1, _left);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final next = _remaining();
+      if (next != _left) setState(() => _left = next);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.deadline == null) return const SizedBox.shrink();
+    final dark = _riderHomeDark(context);
+    final lastSeconds = _left <= 30;
+    final color = widget.fixedTurn || lastSeconds
+        ? const Color(0xFFDC2626)
+        : (dark ? const Color(0xFFF0A43C) : const Color(0xFFB45309));
+    final track = dark ? const Color(0xFF2C3A4E) : const Color(0xFFE3E9F2);
+    final long = _left > 3600;
+    final label = long
+        ? 'Abierta'
+        : widget.fixedTurn
+            ? '$_left'
+            : '${_left ~/ 60}:${(_left % 60).toString().padLeft(2, '0')}';
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: CircularProgressIndicator(
+              value: long ? 1 : (_left / _total).clamp(0.0, 1.0),
+              strokeWidth: 5,
+              backgroundColor: track,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: _riderText(context),
+              fontSize: long || !widget.fixedTurn ? 13 : 20,
+              fontWeight: FontWeight.w900,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestTag extends StatelessWidget {
+  final String label;
+  const _RequestTag({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final ink = dark ? const Color(0xFFF0A43C) : const Color(0xFFB45309);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: ink.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: ink.withValues(alpha: .45)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: .6),
+      ),
+    );
+  }
+}
+
+class _RequestPriceBox extends StatelessWidget {
+  final String label;
+  final String amount;
+  final bool fixed;
+  const _RequestPriceBox({required this.label, required this.amount, required this.fixed});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final ink = fixed
+        ? (dark ? const Color(0xFF7CE3A1) : const Color(0xFF0B6B32))
+        : (dark ? const Color(0xFFF0A43C) : const Color(0xFFB45309));
+    return Container(
+      constraints: const BoxConstraints(minWidth: 92, maxWidth: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: ink.withValues(alpha: .13),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ink.withValues(alpha: .5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: ink, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: .6)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(amount,
+                style: TextStyle(color: ink, fontSize: 26, height: 1.05, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestTile extends StatelessWidget {
+  final String label;
+  final String value;
+  const _RequestTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(color: _riderMuted(context), fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: .6)),
+          const SizedBox(height: 2),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: _riderText(context), fontSize: 15, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Contraofertas y botones de la solicitud. En ofertas, elegir un monto cambia
+/// el botón principal a «CONTRAOFERTAR»; sin monto elegido es «ACEPTAR».
+class _RequestActions extends StatefulWidget {
+  final double fare;
+  final List<double> steps;
+  final Object? currency;
+  final bool showCounter;
+  final bool counterEnabled;
+  final bool fixedMode;
+  final VoidCallback onAccept;
+  final ValueChanged<num> onQuickOffer;
+  final VoidCallback onClose;
+
+  const _RequestActions({
+    required this.fare,
+    required this.steps,
+    required this.currency,
+    required this.showCounter,
+    required this.counterEnabled,
+    required this.fixedMode,
+    required this.onAccept,
+    required this.onQuickOffer,
+    required this.onClose,
+  });
+
+  @override
+  State<_RequestActions> createState() => _RequestActionsState();
+}
+
+class _RequestActionsState extends State<_RequestActions> {
+  int? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final amber = dark ? const Color(0xFFF0A43C) : const Color(0xFFB45309);
+    const green = Color(0xFF16A34A);
+    const red = Color(0xFFDC2626);
+    final selected = _selected;
+    final counter = selected != null;
+    final target = counter ? widget.fare + widget.steps[selected] : widget.fare;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.showCounter) ...[
+          Text('PEDIR MÁS POR ESTE VIAJE',
+              style: TextStyle(color: _riderMuted(context), fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: .6)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              for (var i = 0; i < widget.steps.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 42,
+                    child: OutlinedButton(
+                      onPressed: widget.counterEnabled
+                          ? () => setState(() => _selected = selected == i ? null : i)
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: selected == i ? amber : _riderText(context),
+                        backgroundColor: selected == i ? amber.withValues(alpha: .14) : null,
+                        side: BorderSide(color: selected == i ? amber : _riderBorder(context), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text('+ ' + _rideMoney(widget.steps[i], widget.currency),
+                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: Tooltip(
+                message: widget.fixedMode ? 'Rechazar' : 'Ignorar oferta',
+                child: OutlinedButton(
+                  onPressed: widget.onClose,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: red,
+                    backgroundColor: red.withValues(alpha: .1),
+                    side: BorderSide(color: red.withValues(alpha: .5), width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Icon(Icons.close_rounded, size: 26),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 56,
+                child: FilledButton(
+                  onPressed: counter ? () => widget.onQuickOffer(target) : widget.onAccept,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: counter ? amber : green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: Text(
+                    (counter ? 'CONTRAOFERTAR · ' : 'ACEPTAR · ') + _rideMoney(target, widget.currency),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: .3),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.fixedMode
+              ? 'Precio fijo: no se negocia. Si no respondes a tiempo, pasa al siguiente conductor.'
+              : counter
+                  ? 'Le enviaremos tu contraoferta al pasajero. Puede aceptarla o no.'
+                  : 'Acepta el precio del pasajero o pide más con un monto.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _riderMuted(context), fontSize: 11),
+        ),
+      ],
     );
   }
 }
@@ -19146,41 +19342,6 @@ class _NoticeCard extends StatelessWidget {
   }
 }
 
-class _JobInfoPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _JobInfoPill({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F4F7),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: expressMuted),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: expressMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CircleButton extends StatelessWidget {
   final IconData icon;
