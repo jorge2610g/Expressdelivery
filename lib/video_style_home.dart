@@ -12691,15 +12691,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
                           data != null &&
                           data.profile['online_status'] == 'online';
                       return SizedBox(
-                        height: showMotoMode ? 104 : 72,
+                        height: showMotoMode ? 108 : 72,
                         child: Stack(
                           clipBehavior: Clip.none,
                           alignment: Alignment.topCenter,
                           children: [
                             if (showMotoMode)
                               Positioned(
-                                top: 56,
-                                right: 0,
+                                top: 64,
+                                left: 0,
                                 child: _MotoModePill(
                                   comfort: motoModeStatus['mode'] == 'comfort',
                                   onTap: _onMotoModePillTap,
@@ -12709,7 +12709,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                 motoModeEndedBannerUntil != null &&
                                 DateTime.now().isBefore(motoModeEndedBannerUntil!))
                               Positioned(
-                                top: 92,
+                                top: 100,
                                 left: 0,
                                 right: 0,
                                 child: Container(
