@@ -13,7 +13,10 @@ void main() {
     expect(page, contains("('driver_challenge', 'Retos')"));
     expect(page, contains("('wallet', 'Billetera')"));
     expect(page, contains('ChoiceChip('));
-    expect(page, contains('ContentSizedGrid('));
+    // Los cuadros de atajo duplicaban las pestañas y se quitaron.
+    expect(page, isNot(contains('ContentSizedGrid(')));
+    expect(page, contains('LinearProgressIndicator('));
+    expect(page, contains('Cómo funciona'));
   });
 
   test('driver referral page describes the configured reward basis', () {

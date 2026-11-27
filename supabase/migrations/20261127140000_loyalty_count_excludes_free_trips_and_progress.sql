@@ -1,0 +1,10 @@
+-- Fidelidad: cuenta solo viajes pagados desde el inicio de la campaña, sin contar el viaje gratis
+-- (parche aplicado sobre settle_trip_benefits_for_payment), y avance del pasajero para la app.
+-- Aplicada en Supabase. El parche reemplaza en la función vigente:
+--   * declara v_loyalty_count integer;
+--   * dentro del bucle de campañas «loyalty», calcula v_loyalty_count = viajes completados y pagados
+--     del pasajero en la zona, desde starts_at, sin el viaje que usó un cupón de fidelidad;
+--   * premia cuando v_loyalty_count>0 y v_loyalty_count % trip_threshold = 0, y nunca en el propio
+--     viaje que consumió un cupón de fidelidad.
+-- Además: función benefit_loyalty_progress_v1(p_channel) y audiencia «drivers» del programa de
+-- referidos de conductores de Trinidad.

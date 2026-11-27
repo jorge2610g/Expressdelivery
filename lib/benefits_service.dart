@@ -15,6 +15,23 @@ class BenefitsService {
     return Map<String, dynamic>.from(raw);
   }
 
+  /// Avance del pasajero en las campañas de fidelidad de su zona. Falla en
+  /// vacío: si no se puede leer, la tarjeta se muestra sin barra de avance.
+  Future<List<Map<String, dynamic>>> loyaltyProgress() async {
+    try {
+      final raw = await supabase.rpc('benefit_loyalty_progress_v1', params: {
+        'p_channel': ExpressRuntimeChannel.name,
+      });
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<Map<String, dynamic>> driverReferralStatus() async {
     final raw = await supabase.rpc('my_driver_referral_status', params: {
       'p_channel': ExpressRuntimeChannel.name,

@@ -1,4 +1,3 @@
-import 'content_sized_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,6 +19,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
   final _service = BenefitsService();
   late Future<Map<String, dynamic>> _future;
   late Future<Map<String, dynamic>> _referralFuture;
+  late Future<List<Map<String, dynamic>>> _loyaltyFuture;
   final _referralCode = TextEditingController();
   bool _referralSaving = false;
   String? _joiningChallengeId;
@@ -41,6 +41,9 @@ class _BenefitsPageState extends State<BenefitsPage> {
     super.initState();
     _selectedModule = widget.initialModule;
     _future = _service.overview(role: _role);
+    _loyaltyFuture = widget.driver
+        ? Future.value(const <Map<String, dynamic>>[])
+        : _service.loyaltyProgress();
     _referralFuture = widget.driver
         ? _service.driverReferralStatus()
         : Future<Map<String, dynamic>>.value(const <String, dynamic>{});
@@ -54,6 +57,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
 
   void _refresh() => setState(() {
         _future = _service.overview(role: _role);
+        if (!widget.driver) _loyaltyFuture = _service.loyaltyProgress();
         if (widget.driver) _referralFuture = _service.driverReferralStatus();
       });
 
@@ -299,7 +303,127 @@ class _BenefitsPageState extends State<BenefitsPage> {
     );
   }
 
+  /// Tarjeta explicada de una campaña de fidelidad: avance, pasos y condiciones.
+  Widget _loyaltyCard(BuildContext context, Map<String, dynamic> item, Map<String, dynamic>? progress) {
+    final config = item['config'] is Map
+        ? Map<String, dynamic>.from(item['config'] as Map)
+        : <String, dynamic>{};
+    final threshold = (progress?['threshold'] as num?)?.toInt() ??
+        int.tryParse(config['trip_threshold']?.toString() ?? '') ?? 0;
+    final done = (progress?['progress'] as num?)?.toInt() ?? 0;
+    final remaining = (progress?['remaining'] as num?)?.toInt() ?? threshold;
+    final available = progress?['coupon_available'] == true;
+    final earned = (progress?['rewards_earned'] as num?)?.toInt() ?? 0;
+    final used = (progress?['rewards_used'] as num?)?.toInt() ?? 0;
+    final cap = progress?['free_trip_cap'] ?? config['free_trip_cap'];
+    final currency = progress?['currency']?.toString() ?? item['currency']?.toString();
+    final endsAt = DateTime.tryParse((progress?['ends_at'] ?? item['ends_at'])?.toString() ?? '')?.toLocal();
+    final until = endsAt == null ? null : '${endsAt.day.toString().padLeft(2, '0')}/${endsAt.month.toString().padLeft(2, '0')}/${endsAt.year}';
+    final description = item['description']?.toString().trim() ?? '';
+    final hasProgress = progress != null && threshold > 0;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFFEAF2FF),
+              foregroundColor: Color(0xFF1769E0),
+              child: Icon(Icons.stars_outlined),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(item['name']?.toString() ?? 'Fidelidad',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17))),
+          ]),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(description, style: const TextStyle(color: Color(0xFF667085), height: 1.35)),
+          ],
+          if (available) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F7EF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                const Icon(Icons.card_giftcard_rounded, color: Color(0xFF16A36A)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  '¡Tienes un viaje gratis disponible! Úsalo con el icono del cupón al pedir tu próximo viaje'
+                  '${cap == null ? '' : ' (hasta ${expressMoney(cap, currency)})'}.',
+                  style: const TextStyle(color: Color(0xFF0B6B43), fontWeight: FontWeight.w700),
+                )),
+              ]),
+            ),
+          ],
+          if (hasProgress) ...[
+            const SizedBox(height: 14),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Llevas $done de $threshold viajes',
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(available ? 'Premio listo' : 'Te faltan $remaining',
+                  style: const TextStyle(color: Color(0xFF1769E0), fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: threshold == 0 ? 0 : (done / threshold).clamp(0.0, 1.0),
+                minHeight: 10,
+                backgroundColor: const Color(0xFFE4E7EC),
+                color: const Color(0xFF1769E0),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              available
+                  ? 'Cuando uses tu viaje gratis, vuelves a empezar: otros $threshold viajes y ganas el siguiente.'
+                  : 'Cuando completes $threshold viajes pagados, ganas un viaje gratis para el siguiente.',
+              style: const TextStyle(color: Color(0xFF667085), fontSize: 12),
+            ),
+            if (earned > 0) ...[
+              const SizedBox(height: 4),
+              Text('Premios ganados: $earned · usados: $used',
+                  style: const TextStyle(color: Color(0xFF667085), fontSize: 12)),
+            ],
+          ],
+          const SizedBox(height: 14),
+          const Text('Cómo funciona', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text('1. Pide y completa $threshold viajes pagados.', style: const TextStyle(height: 1.4)),
+          const Text('2. Recibes un cupón de viaje gratis, de un solo uso.', style: TextStyle(height: 1.4)),
+          const Text('3. Úsalo en tu siguiente viaje con el icono del cupón. Si el viaje cuesta menos del tope, es gratis completo.', style: TextStyle(height: 1.4)),
+          const Text('4. Después de usarlo, vuelves a empezar la cuenta.', style: TextStyle(height: 1.4)),
+          const SizedBox(height: 8),
+          Text(
+            [
+              if (cap != null) 'Tope del viaje gratis: ${expressMoney(cap, currency)}',
+              if (until != null) 'Válido hasta el $until',
+            ].join(' · '),
+            style: const TextStyle(color: Color(0xFF98A2B3), fontSize: 12),
+          ),
+        ]),
+      ),
+    );
+  }
+
   Widget _card(BuildContext context, Map<String, dynamic> item) {
+    if (item['type'] == 'loyalty' && !widget.driver) {
+      return FutureBuilder<List<Map<String, dynamic>>>(
+        future: _loyaltyFuture,
+        builder: (context, snapshot) {
+          final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+          Map<String, dynamic>? progress;
+          for (final row in rows) {
+            if (row['program_id']?.toString() == item['id']?.toString()) progress = row;
+          }
+          return _loyaltyCard(context, item, progress);
+        },
+      );
+    }
     final config = item['config'] is Map
         ? Map<String, dynamic>.from(item['config'] as Map)
         : <String, dynamic>{};
@@ -342,8 +466,9 @@ class _BenefitsPageState extends State<BenefitsPage> {
               Text(item['name']?.toString() ?? 'Beneficio Express',
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
-              Text('Dirigido a: ${benefitAudienceLabel(config['audience'])}',
-                  style: const TextStyle(color: Color(0xFF667085), fontSize: 12, fontWeight: FontWeight.w600)),
+              if (widget.driver)
+                Text('Dirigido a: ${benefitAudienceLabel(config['audience'])}',
+                    style: const TextStyle(color: Color(0xFF667085), fontSize: 12, fontWeight: FontWeight.w600)),
               if (detail.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(detail, style: const TextStyle(color: Color(0xFF667085))),
@@ -474,27 +599,14 @@ class _BenefitsPageState extends State<BenefitsPage> {
               if (_selectedModule == 'home') ...[
                 Text(widget.driver ? 'Programas para conductores' : 'Para ti',
                     style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 10),
-                ContentSizedGrid(
-                  spacing: 8,
-                  children: modules.where((module) => module.$1 != 'home').map((module) => Card(
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedModule = module.$1),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Icon(_moduleIcon(module.$1), color: const Color(0xFF1769E0)),
-                          const SizedBox(height: 6),
-                          Text(module.$2, style: const TextStyle(fontWeight: FontWeight.w800)),
-                        ]),
-                      ),
-                    ),
-                  )).toList(),
-                ),
               ] else
                 Text(modules.firstWhere((module) => module.$1 == _selectedModule).$2,
                     style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              if (!widget.driver && _sectionIntro(_selectedModule) != null) ...[
+                const SizedBox(height: 4),
+                Text(_sectionIntro(_selectedModule)!,
+                    style: const TextStyle(color: Color(0xFF667085), height: 1.35)),
+              ],
               const SizedBox(height: 10),
               if (_selectedModule == 'coupon' && !widget.driver) ...[
                 const Text('Mis cupones', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -600,14 +712,13 @@ class _BenefitsPageState extends State<BenefitsPage> {
     );
   }
 
-  IconData _moduleIcon(String module) => switch (module) {
-        'coupon' => Icons.local_offer_outlined,
-        'activation' => Icons.bolt_outlined,
-        'loyalty' => Icons.stars_outlined,
-        'referral' => Icons.people_alt_outlined,
-        'challenges' || 'driver_challenge' => Icons.flag_outlined,
-        'wallet' => Icons.account_balance_wallet_outlined,
-        _ => Icons.card_giftcard_outlined,
+  /// Explicación corta de cada sección para el pasajero.
+  String? _sectionIntro(String module) => switch (module) {
+        'home' => 'Aquí ves tus beneficios activos y cuánto te falta para el siguiente.',
+        'coupon' => 'Códigos de descuento. Escribe el código al pedir tu viaje, o usa los cupones que ganas con Fidelidad.',
+        'activation' => 'Beneficios por empezar a usar Express, como el descuento de tu primer viaje.',
+        'loyalty' => 'Premios por viajar seguido: cuantos más viajes pagados completes, antes ganas viajes gratis.',
+        _ => null,
       };
 
   Widget _userCouponCard(BuildContext context, Map<String, dynamic> coupon) {
