@@ -1,0 +1,4 @@
+-- Aplicada en Supabase como championship_goals_rules_acceptance (referencia).
+-- Tabla championship_rule_acceptances, RPC driver_championship_accept_rules_v1 y
+-- nuevas claves de driver_championships_for_driver: goals, rules_accepted, my_notices, my_viewed.
+-- Tambien: championship_pair_audit_v1 y championship_daily_pattern_v1 (auditorias de viajes sospechosos).

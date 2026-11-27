@@ -25,6 +25,123 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
   Color get rankSurface => _dark ? const Color(0xFF404859) : const Color(0xFFE6EAF0);
   late Future<Map<String,dynamic>> _future;
   int _tab=0;
+  Map<String,dynamic> _last=const {};
+  bool _gateShown=false;
+  Widget _ruleRow(String icon,String title,String body)=>Padding(
+    padding:const EdgeInsets.symmetric(vertical:7),
+    child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(icon,style:const TextStyle(fontSize:20)),
+      const SizedBox(width:10),
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(title,style:TextStyle(color:ink,fontWeight:FontWeight.w800,fontSize:13)),
+        const SizedBox(height:2),
+        Text(body,style:TextStyle(color:muted,fontSize:12)),
+      ])),
+    ]));
+  Future<void> _showRules(Map<String,dynamic> d,{bool mustAccept=false}) async {
+    var checked=false,busy=false;
+    String? error;
+    final goals=d['goals'] is Map?Map<String,dynamic>.from(d['goals'] as Map):
+      const {'first':50,'second':30,'third':10};
+    await showModalBottomSheet<void>(context:context,isScrollControlled:true,
+      isDismissible:!mustAccept,enableDrag:!mustAccept,backgroundColor:bg,
+      shape:const RoundedRectangleBorder(
+        borderRadius:BorderRadius.vertical(top:Radius.circular(22))),
+      builder:(sheetContext)=>StatefulBuilder(builder:(context,setSheet)=>
+        SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(18,16,18,14),
+          child:Column(mainAxisSize:MainAxisSize.min,
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('Reglas del campeonato',style:TextStyle(color:ink,
+              fontSize:18,fontWeight:FontWeight.w900)),
+            const SizedBox(height:2),
+            Text(mustAccept?'Léelas y acéptalas para participar.':
+              'Léelas antes de participar.',
+              style:TextStyle(color:muted,fontSize:12)),
+            const SizedBox(height:8),
+            Flexible(child:SingleChildScrollView(child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,children:[
+              _ruleRow('🥇','1.er lugar','Al menos ${goals['first']} viajes válidos en el mes.'),
+              _ruleRow('🥈','2.º lugar','Al menos ${goals['second']} viajes válidos en el mes.'),
+              _ruleRow('🥉','3.er lugar','Al menos ${goals['third']} viajes válidos en el mes.'),
+              _ruleRow('⚠️','Si no llegas a la meta','Quedas descartado del premio.'),
+              _ruleRow('✅','Qué cuenta','Viajes completados en la zona, el servicio y las fechas del campeonato.'),
+              _ruleRow('🚫','Qué no cuenta','Viajes cancelados o con irregularidades.'),
+              _ruleRow('🔎','Viajes sospechosos',
+                'Se descartan 3 o más viajes con el mismo pasajero en una semana, '
+                'viajes repetidos con el mismo pasajero, tramo y hora, y los días '
+                'en que solo llevas a pasajeros habituales mientras ignoras otras '
+                'solicitudes. Trabaja con pasajeros distintos y atiende las solicitudes.'),
+              _ruleRow('💰','Premios','No se pagan automáticamente. Se confirman al terminar, después de validar resultados.'),
+              _ruleRow('🔄','Cada mes empieza de cero','Los viajes del mes anterior no se acumulan.'),
+            ]))),
+            if(mustAccept)...[
+              CheckboxListTile(contentPadding:EdgeInsets.zero,
+                controlAffinity:ListTileControlAffinity.leading,
+                value:checked,onChanged:busy?null:(v)=>setSheet(()=>checked=v==true),
+                title:Text('He leído y acepto las reglas del campeonato.',
+                  style:TextStyle(color:ink,fontSize:13))),
+              if(error!=null)
+                Text(error!,style:const TextStyle(color:Colors.redAccent,fontSize:12)),
+            ],
+            const SizedBox(height:8),
+            SizedBox(width:double.infinity,child:FilledButton(
+              onPressed:mustAccept&&(!checked||busy)?null:()async{
+                if(!mustAccept){ Navigator.of(sheetContext).pop(); return; }
+                setSheet((){busy=true;error=null;});
+                try {
+                  await supabase.rpc('driver_championship_accept_rules_v1',
+                    params:{'p_championship_id':d['id']});
+                  if(sheetContext.mounted) Navigator.of(sheetContext).pop();
+                  if(mounted) _refresh();
+                } catch (_) {
+                  setSheet((){busy=false;error='No se pudo guardar. Intenta de nuevo.';});
+                }
+              },
+              child:Text(mustAccept?'Aceptar y participar':'Entendido'))),
+          ])))));
+  }
+  Widget _myMonth(Map<String,dynamic> data){
+    final goals=data['goals'];
+    if(goals is! Map) return const SizedBox.shrink();
+    final rides=_integer(data['my_rides']);
+    final first=_integer(goals['first']),second=_integer(goals['second']),
+      third=_integer(goals['third']);
+    final notices=_integer(data['my_notices']),viewed=_integer(data['my_viewed']);
+    final target=rides>=second?first:rides>=third?second:third;
+    final left=target-rides;
+    return Padding(padding:const EdgeInsets.only(bottom:16),
+      child:_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        _heading('Tu mes'),
+        Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+          Text('$rides',style:TextStyle(color:gold,fontSize:27,fontWeight:FontWeight.w900)),
+          const SizedBox(width:6),
+          Text('viajes válidos',style:TextStyle(color:muted,fontSize:12)),
+        ]),
+        const SizedBox(height:8),
+        ClipRRect(borderRadius:BorderRadius.circular(5),
+          child:LinearProgressIndicator(minHeight:8,
+            value:(rides/first).clamp(0.0,1.0).toDouble(),
+            backgroundColor:statSurface,color:gold)),
+        const SizedBox(height:8),
+        Text('Metas del mes: 🥇 $first · 🥈 $second · 🥉 $third',
+          style:TextStyle(color:ink,fontSize:12)),
+        Text(left>0?'Te faltan $left viajes para la siguiente meta.':
+          '¡Ya alcanzaste la meta del 1.er lugar!',
+          style:TextStyle(color:muted,fontSize:12)),
+        Text('Si no llegas a la meta de tu puesto, quedas descartado del premio.',
+          style:TextStyle(color:muted,fontSize:11)),
+        const Divider(height:22),
+        Text('Solicitudes que te llegaron',style:TextStyle(color:ink,
+          fontWeight:FontWeight.w800,fontSize:13)),
+        const SizedBox(height:6),
+        Text('Avisos recibidos: $notices · Abiertas: $viewed · Completadas: $rides',
+          style:TextStyle(color:muted,fontSize:12)),
+        if(notices>rides)Padding(padding:const EdgeInsets.only(top:6),
+          child:Text('Te llegaron ${notices-rides} solicitudes que no terminaste. '
+            'Aceptar más te acerca a los premios.',
+            style:TextStyle(color:gold,fontSize:12))),
+      ])));
+  }
   @override
   void initState() { super.initState(); _load(); }
 
@@ -207,8 +324,12 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
     appBar:AppBar(backgroundColor:bg,foregroundColor:ink,
       title:Text('Campeonato Express',
         style:TextStyle(fontWeight:FontWeight.w900)),
-      actions:[IconButton(tooltip:'Actualizar',icon:Icon(Icons.refresh),
-        onPressed:_refresh)]),
+      actions:[
+        IconButton(tooltip:'Reglas del campeonato',
+          icon:Icon(Icons.info_outline,color:gold),
+          onPressed:_last['available']==true?()=>_showRules(_last):null),
+        IconButton(tooltip:'Actualizar',icon:Icon(Icons.refresh),
+          onPressed:_refresh)]),
     body:FutureBuilder<Map<String,dynamic>>(future:_future,builder:(context,snapshot){
       if(snapshot.connectionState!=ConnectionState.done)
         return const Center(child:CircularProgressIndicator());
@@ -227,6 +348,20 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
           ])));
       final d=snapshot.data??<String,dynamic>{};
       final rows=_leaders(d);
+      if(!identical(_last,d)){
+        _last=d;
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted) setState((){});
+        });
+      }
+      if(d['available']==true&&d['rules_accepted']==false&&!_gateShown){
+        _gateShown=true;
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted) _showRules(d,mustAccept:true).whenComplete((){
+            if(mounted) _gateShown=false;
+          });
+        });
+      }
       if(d['available']!=true)
         return RefreshIndicator(onRefresh:_refresh,child:ListView(
           padding:const EdgeInsets.all(24),children:[
@@ -277,6 +412,7 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
           const SizedBox(height:17),
           if(_tab==0)...[
             _myStats(d,rows),const SizedBox(height:16),
+            _myMonth(d),
             _heading('Líderes del campeonato'),
             _podium(rows),const SizedBox(height:16),
             _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
