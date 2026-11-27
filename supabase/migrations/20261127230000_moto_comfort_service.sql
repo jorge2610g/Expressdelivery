@@ -1,0 +1,5 @@
+-- Aplicada en Supabase como moto_comfort_service (referencia).
+-- Modo del conductor (moto_service_mode, moto_comfort_blocked), ventana 6:00-18:00 (America/La_Paz),
+-- elegibilidad de motorcycle_comfort en driver_vehicle_supports_ride y fixed_dispatch_vehicle_ok,
+-- reportes de sombrilla (moto_umbrella_reports) y RPC de conductor, pasajero y panel.
+-- El servicio motorcycle_comfort queda en service_catalog y apagado en cada zona hasta que el propietario lo active.

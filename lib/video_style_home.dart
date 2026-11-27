@@ -99,11 +99,18 @@ const List<Map<String, dynamic>> _fallbackRideServices = [
   },
 ];
 
+/// Texto de la categoría de una solicitud en las tarjetas del conductor.
+String _rideCategoryLabel(String? category) {
+  if (category == 'motorcycle_comfort') return 'Moto Confort';
+  return category ?? 'Viaje';
+}
+
 IconData _rideServiceIcon(Map<String, dynamic> service) {
   final key = service['service_key']?.toString();
   if (key == 'parcel') return Icons.inventory_2_outlined;
   if (key == 'carga') return Icons.local_shipping_rounded;
   final vehicle = service['vehicle_type']?.toString();
+  if (key == 'motorcycle_comfort') return Icons.beach_access_rounded;
   if (key == 'xl' || vehicle == 'xl') return Icons.airport_shuttle_rounded;
   if (vehicle == 'motorcycle' || key == 'motorcycle') {
     return Icons.two_wheeler_rounded;
@@ -3935,6 +3942,45 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  final Set<String> _umbrellaAskedTrips = <String>{};
+
+  /// Tras un viaje de Moto Confort pregunta al pasajero si el conductor tenía
+  /// sombrilla. «No tenía» se reporta al servidor, que avisa al conductor.
+  Future<void> _askUmbrellaIfPending() async {
+    try {
+      final raw = await supabase.rpc('passenger_pending_umbrella_trip_v1');
+      if (raw is! Map || raw['trip_id'] == null) return;
+      final tripId = raw['trip_id'].toString();
+      if (!_umbrellaAskedTrips.add(tripId) || !mounted) return;
+      final had = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('¿El conductor tenía sombrilla?'),
+          content: const Text(
+            'Pediste Moto Confort. Tu respuesta ayuda a que el servicio sea '
+            'confiable. Si dices que no tenía, revisamos al conductor.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('No tenía'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Sí, tenía'),
+            ),
+          ],
+        ),
+      );
+      if (had == null) return;
+      await supabase.rpc('passenger_report_umbrella_v1',
+          params: {'p_trip_id': tripId, 'p_had_umbrella': had});
+    } catch (_) {
+      // La pregunta es opcional: un fallo no debe interrumpir la calificación.
+    }
+  }
+
   Future<void> _ratePending(Map<String, dynamic> pending) async {
     final saved = await showExpressRatingDialog(
       context,
@@ -3942,6 +3988,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       pending,
       counterpartLabel: 'conductor',
     );
+    if (mounted) unawaited(_askUmbrellaIfPending());
     if (saved && mounted) {
       final ratedId = pending['id']?.toString();
       if (ratedId != null && ratedId.isNotEmpty) {
@@ -10041,6 +10088,131 @@ class _DriverMapHomeState extends State<DriverMapHome>
     } catch (_) {}
   }
 
+  /// Pregunta cómo se conecta un conductor de moto cuando su ciudad tiene
+  /// Moto Confort. Devuelve false si cancela la conexión. Si algo falla, el
+  /// conductor se conecta como Moto Económico.
+  Future<bool> _chooseMotoMode() async {
+    Map<String, dynamic> status;
+    try {
+      final raw = await supabase.rpc('driver_moto_mode_status_v1');
+      if (raw is! Map) return true;
+      status = Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return true;
+    }
+    if (status['has_motorcycle'] != true || status['zone_enabled'] != true) {
+      return true;
+    }
+    if (status['can_choose'] != true) {
+      // Fuera de horario o inhabilitado: se conecta como Económico.
+      if (status['mode'] == 'comfort') {
+        try {
+          await supabase.rpc('driver_set_moto_mode_v1',
+              params: {'p_mode': 'economy', 'p_accept': false});
+        } catch (_) {}
+      }
+      return true;
+    }
+    if (!mounted) return false;
+    var comfort = status['mode'] == 'comfort';
+    var accepted = false;
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('¿Cómo quieres conectarte?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Moto Confort se ofrece de 6:00 a 18:00.'),
+                const SizedBox(height: 10),
+                RadioListTile<bool>(
+                  contentPadding: EdgeInsets.zero,
+                  value: false,
+                  groupValue: comfort,
+                  onChanged: (v) => setLocal(() => comfort = v == true),
+                  title: const Text('Moto Económico'),
+                  subtitle: const Text('Con o sin sombrilla. Precio económico.'),
+                ),
+                RadioListTile<bool>(
+                  contentPadding: EdgeInsets.zero,
+                  value: true,
+                  groupValue: comfort,
+                  onChanged: (v) => setLocal(() => comfort = v == true),
+                  title: const Text('Moto Confort'),
+                  subtitle: const Text(
+                      'Solo si tu moto tiene sombrilla. Tarifa de confort.'),
+                ),
+                if (comfort) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1FFF5A4A),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Regla de Moto Confort: si un pasajero reporta que tu '
+                      'moto no tenía sombrilla, tu cuenta puede quedar '
+                      'inhabilitada para Moto Confort. Verifica que la tengas '
+                      'antes de conectarte.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: accepted,
+                    onChanged: (v) => setLocal(() => accepted = v == true),
+                    title: const Text(
+                      'Mi moto tiene sombrilla y acepto la regla.',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'cancel'),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: comfort && !accepted
+                  ? null
+                  : () => Navigator.pop(
+                      dialogContext, comfort ? 'comfort' : 'economy'),
+              child: Text(comfort
+                  ? 'Conectarme como Moto Confort'
+                  : 'Conectarme como Moto Económico'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || choice == 'cancel') return false;
+    try {
+      await supabase.rpc('driver_set_moto_mode_v1',
+          params: {'p_mode': choice, 'p_accept': choice == 'comfort'});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(choice == 'comfort'
+                ? 'No se pudo activar Moto Confort. Inténtalo de nuevo.'
+                : 'No se pudo guardar tu modo. Inténtalo de nuevo.'),
+          ));
+      }
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
     if (busy) return;
 
@@ -10120,6 +10292,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
               ],
             ),
           );
+          return;
+        }
+
+        // Moto Económico o Moto Confort (con sombrilla): se pregunta al conectar.
+        if (!await _chooseMotoMode()) {
+          if (mounted) setState(() => busy = false);
           return;
         }
 
@@ -11863,7 +12041,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                 asDouble(ride['route_duration_minutes'])
                                     ?.round();
                             final category = isParcel ? 'Envíos'
-                                : (ride['category']?.toString() ?? 'Viaje');
+                                : _rideCategoryLabel(ride['category']?.toString());
                             final payment =
                                 ride['payment_method']?.toString();
 
@@ -12838,7 +13016,7 @@ class _DriverRequestPopup extends StatelessWidget {
         ride['pricing_mode'] == 'fixed' && couponDiscount > 0;
     final tripKm = asDouble(ride['route_distance_km']);
     final category = ride['service_mode'] == 'parcel' ? 'Envíos'
-        : (ride['category']?.toString() ?? 'Viaje');
+        : _rideCategoryLabel(ride['category']?.toString());
     final payment = ride['payment_method']?.toString();
     final pickupDistance = _pickupDistanceKm(
       current,
@@ -15178,7 +15356,17 @@ class _RideServiceSlots extends StatelessWidget {
 
     if (visible.isEmpty) return const SizedBox.shrink();
 
-    return LayoutBuilder(
+    // Descripción corta del servicio elegido (por ejemplo Moto Económico o
+    // Moto Confort), debajo de los botones.
+    Map<String, dynamic>? picked;
+    for (final service in visible) {
+      if (service['service_key']?.toString() == selectedKey) picked = service;
+    }
+    final pickedDescription = picked?['description']?.toString().trim() ?? '';
+    final showDescription = pickedDescription.isNotEmpty &&
+        (selectedKey == 'motorcycle' || selectedKey == 'motorcycle_comfort');
+
+    final slots = LayoutBuilder(
       builder: (context, constraints) {
         final baseWidth = ((constraints.maxWidth - 20) / 5)
             .clamp(72.0, 118.0)
@@ -15219,6 +15407,22 @@ class _RideServiceSlots extends StatelessWidget {
           ),
         );
       },
+    );
+    if (!showDescription) return slots;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        slots,
+        const SizedBox(height: 6),
+        Text(
+          pickedDescription,
+          style: TextStyle(
+            color: _riderMuted(context),
+            fontSize: 12,
+            height: 1.3,
+          ),
+        ),
+      ],
     );
   }
 }
