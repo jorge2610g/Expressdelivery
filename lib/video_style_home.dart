@@ -5197,6 +5197,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
         return;
       }
+      if (e.toString().contains('Moto Confort está disponible')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Moto Confort está disponible de 6:00 a 18:00. '
+              'Puedes pedir Moto Económico.',
+            ),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No se pudo solicitar el viaje. Inténtalo nuevamente.'),
