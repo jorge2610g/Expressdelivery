@@ -231,6 +231,8 @@ class _ExpressPhoneRequiredGateState
         throw StateError('No se pudo confirmar el teléfono guardado.');
       }
       widget.onSaved();
+    } on PhoneAlreadyRegisteredException {
+      if (mounted) setState(() => error = PhoneAlreadyRegisteredException.message);
     } catch (_) {
       if (mounted) setState(() {
         error = 'No se pudo guardar el número. Revisa tu conexión e inténtalo nuevamente.';
@@ -2712,6 +2714,11 @@ class _ProfilePageState extends State<_ProfilePage> {
         SnackBar(content: Text(applied
             ? 'Perfil actualizado.'
             : 'Solicitud enviada. Se aplicará cuando la administración la apruebe.')),
+      );
+    } on PhoneAlreadyRegisteredException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(PhoneAlreadyRegisteredException.message)),
       );
     } catch (e) {
       if (!mounted) return;
