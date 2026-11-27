@@ -11324,7 +11324,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     )?.toUtc();
     final visualDeadline = sequentialDispatch && serverDeadline != null
         ? serverDeadline
-        : DateTime.now().toUtc().add(const Duration(seconds: 30));
+        : DateTime.now().toUtc().add(const Duration(seconds: _driverOfferPopupSeconds));
     if (serverDeadline == null ||
         !serverDeadline.isAfter(DateTime.now().toUtc())) {
       _dropUnavailableRide(id);
@@ -11348,7 +11348,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                           999) ~/
                       1000,
                 )
-              : 30)
+              : _driverOfferPopupSeconds)
           : 0;
       driverPopupRoadRoute = const [];
     });
@@ -11398,7 +11398,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
     if (!automatic) return;
 
-    // Sonido corto dentro de la app; el popup permanece visible 30 s.
+    // Sonido corto dentro de la app; el popup permanece visible 15 s.
     startExpressAlertSound(durationSeconds: 2);
     driverRequestPopupTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -11574,13 +11574,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
     viewedDeliveryRequestIds.add(id);
     driverDeliveryPopupTimer?.cancel();
     final expires = automatic
-        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        ? DateTime.now().toUtc().add(const Duration(seconds: _driverOfferPopupSeconds))
         : null;
     setState(() {
       driverDeliveryPopupId = id;
       driverDeliveryPopupAutomatic = automatic;
       driverDeliveryPopupExpiresAt = expires;
-      driverDeliveryPopupRemaining = automatic ? 30 : 0;
+      driverDeliveryPopupRemaining = automatic ? _driverOfferPopupSeconds : 0;
       driverPopupRoadRoute = const [];
     });
     _syncDriverFocusNavigation();
@@ -12480,6 +12480,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     current: current,
                     remainingSeconds: driverRequestPopupRemaining,
                     automatic: driverRequestPopupAutomatic,
+                    windowDeadline: driverRequestPopupExpiresAt,
                     onClose: () {
                       // Precio fijo uno a uno: rechazar pasa el viaje al siguiente conductor.
                       if (driverPopupRide!['dispatch_style'] == 'sequential') {
@@ -12509,6 +12510,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     current: current,
                     automatic: driverDeliveryPopupAutomatic,
                     remainingSeconds: driverDeliveryPopupRemaining,
+                    windowDeadline: driverDeliveryPopupExpiresAt,
                     onClose: () => _closeDriverDeliveryPopup(
                       showNext: driverDeliveryPopupAutomatic,
                     ),
@@ -12738,6 +12740,8 @@ class _DriverRequestPopup extends StatelessWidget {
   final VoidCallback onOffer;
   final ValueChanged<num> onQuickOffer;
   final VoidCallback onAccept;
+  /// Fin de la ventana automática de una oferta (15 s). Null si se abrió a mano.
+  final DateTime? windowDeadline;
 
   const _DriverRequestPopup({
     required this.ride,
@@ -12748,6 +12752,7 @@ class _DriverRequestPopup extends StatelessWidget {
     required this.onOffer,
     required this.onQuickOffer,
     required this.onAccept,
+    this.windowDeadline,
   });
 
   @override
@@ -12911,9 +12916,14 @@ class _DriverRequestPopup extends StatelessWidget {
                           deadline: sequentialFixed
                               ? DateTime.tryParse(
                                   ride['fixed_attempt_expires_at']?.toString() ?? '')
-                              : DateTime.tryParse(
-                                  ride['expires_at']?.toString() ?? ''),
+                              : (automatic && windowDeadline != null)
+                                  ? windowDeadline
+                                  : DateTime.tryParse(
+                                      ride['expires_at']?.toString() ?? ''),
                           fixedTurn: sequentialFixed,
+                          shortWindow: !sequentialFixed &&
+                              automatic &&
+                              windowDeadline != null,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -13064,6 +13074,10 @@ class _DriverRequestPopup extends StatelessWidget {
   }
 }
 
+/// Segundos que la ventana de una oferta (viaje, envío o pedido) permanece a la
+/// vista del conductor. El precio fijo usa el turno que fija el servidor (15 s).
+const int _driverOfferPopupSeconds = 15;
+
 /// Anillo con la cuenta atrás de una solicitud. En precio fijo es el turno del
 /// conductor (rojo); en ofertas es el tiempo que queda a la solicitud (ámbar,
 /// rojo en los últimos 30 s). Si la solicitud dura más de una hora (viaje
@@ -13071,8 +13085,14 @@ class _DriverRequestPopup extends StatelessWidget {
 class _RequestCountdownRing extends StatefulWidget {
   final DateTime? deadline;
   final bool fixedTurn;
+  /// Ventana corta (segundos): muestra segundos y pasa a rojo al final.
+  final bool shortWindow;
 
-  const _RequestCountdownRing({required this.deadline, required this.fixedTurn});
+  const _RequestCountdownRing({
+    required this.deadline,
+    required this.fixedTurn,
+    this.shortWindow = false,
+  });
 
   @override
   State<_RequestCountdownRing> createState() => _RequestCountdownRingState();
@@ -13093,7 +13113,9 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
   void initState() {
     super.initState();
     _left = _remaining();
-    _total = widget.fixedTurn ? math.max(15, _left) : math.max(1, _left);
+    _total = widget.fixedTurn || widget.shortWindow
+        ? math.max(_driverOfferPopupSeconds, _left)
+        : math.max(1, _left);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final next = _remaining();
@@ -13111,7 +13133,7 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
   Widget build(BuildContext context) {
     if (widget.deadline == null) return const SizedBox.shrink();
     final dark = _riderHomeDark(context);
-    final lastSeconds = _left <= 30;
+    final lastSeconds = _left <= (widget.shortWindow ? 5 : 30);
     final color = widget.fixedTurn || lastSeconds
         ? const Color(0xFFDC2626)
         : (dark ? const Color(0xFFF0A43C) : const Color(0xFFB45309));
@@ -13119,7 +13141,7 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
     final long = _left > 3600;
     final label = long
         ? 'Abierta'
-        : widget.fixedTurn
+        : widget.fixedTurn || widget.shortWindow
             ? '$_left'
             : '${_left ~/ 60}:${(_left % 60).toString().padLeft(2, '0')}';
     return SizedBox(
@@ -13142,7 +13164,7 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
             label,
             style: TextStyle(
               color: _riderText(context),
-              fontSize: long || !widget.fixedTurn ? 13 : 20,
+              fontSize: long || !(widget.fixedTurn || widget.shortWindow) ? 13 : 20,
               fontWeight: FontWeight.w900,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
