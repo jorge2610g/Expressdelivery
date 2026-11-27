@@ -15063,7 +15063,10 @@ class _RideFareControlCard extends StatelessWidget {
         : const Color(0xFFF7F8FA);
     // Solo precio fijo: el precio va en la tarjeta del vehículo, sin lápiz ni
     // barra con − y +.
-    final fixedOnly = priceChoice == null && fixedPrice;
+    // También mientras se calcula la tarifa: así la tarjeta no salta entre el
+    // formato compacto y la barra grande con − y + cada vez que se cambia de servicio.
+    final fixedOnly =
+        priceChoice == null && (fixedPrice || quoting || !fareReady);
 
     return Container(
       decoration: BoxDecoration(
@@ -15188,7 +15191,28 @@ class _RideFareControlCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (fixedOnly)
+                if (fixedOnly && quoting)
+                  // Mientras calcula: una silueta discreta, sin texto ni barra.
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final size in const [Size(62, 18), Size(40, 10)])
+                          Container(
+                            width: size.width,
+                            height: size.height,
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _riderMuted(context).withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                      ],
+                    ),
+                  )
+                else if (fixedOnly)
                   Padding(
                     padding: const EdgeInsets.only(right: 2),
                     child: Column(
