@@ -9,5 +9,7 @@ void main() {
       src,
       contains('priceChoice == null && (fixedPrice || quoting || !fareReady)'),
     );
+    // Mientras calcula se ve una silueta, no el texto «Calculando…» en una barra.
+    expect(src, contains('Mientras calcula: una silueta discreta'));
   });
 }
