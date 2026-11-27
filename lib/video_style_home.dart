@@ -15063,7 +15063,10 @@ class _RideFareControlCard extends StatelessWidget {
         : const Color(0xFFF7F8FA);
     // Solo precio fijo: el precio va en la tarjeta del vehículo, sin lápiz ni
     // barra con − y +.
-    final fixedOnly = priceChoice == null && fixedPrice;
+    // También mientras se calcula la tarifa: así la tarjeta no salta entre el
+    // formato compacto y la barra grande con − y + cada vez que se cambia de servicio.
+    final fixedOnly =
+        priceChoice == null && (fixedPrice || quoting || !fareReady);
 
     return Container(
       decoration: BoxDecoration(
