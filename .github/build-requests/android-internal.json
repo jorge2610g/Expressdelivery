@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 179,
-  "changelog": "Express 1.6.9 build 179 para Prueba interna. Pasajero: banners publicitarios en carrusel, con imágenes o videos, enlaces por anuncio y tamaño adaptable según la ubicación para que ocupen el espacio previsto sin cubrir el mapa. Conductor y pasajero: tarjetas de banner ajustan su altura al contenido. Incluye los cambios de la 178: actualización más rápida del viaje del conductor y publicación de viajes programados según el ajuste del panel. Solo Prueba interna; QA manual de dispositivo pendiente."
+  "build_number": 180,
+  "changelog": "Express 1.6.9 build 180 para Prueba interna. Conductor: solicitud de precio fijo y de oferta rediseñadas con cuenta atrás (15 s), contraoferta en dos pasos, reintento de búsqueda a los mismos conductores y Campeonato Express con reglas, metas del mes (50, 30 y 10 viajes), tarjeta Tu mes y aceptación de reglas. Pasajero: tarjeta de precio fijo compacta sin barra de cálculo, envíos con tarifa por vehículo, aviso de teléfono ya registrado, aviso para activar notificaciones y fidelidad con barra de avance. Incluye los cambios de la 179. Solo Prueba interna; QA manual de dispositivo pendiente."
 }
