@@ -11447,7 +11447,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     // Sonido corto dentro de la app; el popup permanece visible 15 s.
     startExpressAlertSound(durationSeconds: 2);
     driverRequestPopupTimer =
-        Timer.periodic(const Duration(seconds: 1), (timer) {
+        Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (!mounted || driverRequestPopupId != id) {
         timer.cancel();
         return;
@@ -13174,7 +13174,10 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
   int _remaining() {
     final deadline = widget.deadline;
     if (deadline == null) return 0;
-    return math.max(0, deadline.toUtc().difference(DateTime.now().toUtc()).inSeconds);
+    // Redondeo hacia arriba y el mismo plazo que el contador de arriba, para
+    // que ambos muestren siempre el mismo número de segundos.
+    final ms = deadline.toUtc().difference(DateTime.now().toUtc()).inMilliseconds;
+    return math.max(0, (ms + 999) ~/ 1000);
   }
 
   @override
@@ -13184,7 +13187,7 @@ class _RequestCountdownRingState extends State<_RequestCountdownRing> {
     _total = widget.fixedTurn || widget.shortWindow
         ? math.max(_driverOfferPopupSeconds, _left)
         : math.max(1, _left);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!mounted) return;
       final next = _remaining();
       if (next != _left) setState(() => _left = next);
