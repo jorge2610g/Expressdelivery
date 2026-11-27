@@ -15061,6 +15061,9 @@ class _RideFareControlCard extends StatelessWidget {
     final surface = dark
         ? const Color(0xFF222222)
         : const Color(0xFFF7F8FA);
+    // Solo precio fijo: el precio va en la tarjeta del vehículo, sin lápiz ni
+    // barra con − y +.
+    final fixedOnly = priceChoice == null && fixedPrice;
 
     return Container(
       decoration: BoxDecoration(
@@ -15185,6 +15188,40 @@ class _RideFareControlCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (fixedOnly)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          quoting
+                              ? 'Calculando…'
+                              : fareReady
+                                  ? _rideMoney(
+                                      couponDiscount > 0
+                                          ? fare - couponDiscount
+                                          : fare,
+                                      currencyCode,
+                                    )
+                                  : 'Sin tarifa',
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          couponDiscount > 0 ? 'Precio fijo con cupón' : 'Precio fijo',
+                          style: TextStyle(
+                            color: _riderMuted(context),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 IconButton(
                   tooltip: couponApplied ? 'Cupón aplicado' : 'Cupón de descuento',
                   onPressed: quoting || !fareReady ? null : onCoupon,
@@ -15194,18 +15231,20 @@ class _RideFareControlCard extends StatelessWidget {
                     size: 19,
                   ),
                 ),
-                IconButton(
-                  tooltip: couponApplied || fixedPrice ? 'Precio fijo' : 'Editar tarifa',
-                  onPressed: quoting || !fareReady || couponApplied || fixedPrice ? null : onEdit,
-                  icon: Icon(
-                    Icons.edit_rounded,
-                    color: _riderMuted(context),
-                    size: 19,
+                if (!fixedOnly)
+                  IconButton(
+                    tooltip: couponApplied || fixedPrice ? 'Precio fijo' : 'Editar tarifa',
+                    onPressed: quoting || !fareReady || couponApplied || fixedPrice ? null : onEdit,
+                    icon: Icon(
+                      Icons.edit_rounded,
+                      color: _riderMuted(context),
+                      size: 19,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
+          if (!fixedOnly) ...[
           Divider(height: 1, color: _riderBorder(context)),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
@@ -15264,6 +15303,7 @@ class _RideFareControlCard extends StatelessWidget {
               ],
             ),
           ),
+          ],
         ],
       ),
     );
