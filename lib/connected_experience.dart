@@ -37,6 +37,7 @@ import 'phone_utils.dart';
 import 'phone_country_location.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
+import 'push_permission_prompt.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
 import 'video_style_home.dart';
@@ -859,7 +860,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
     return Theme(
       data: theme,
-      child: LiveMeetingOverlay(
+      child: PushPermissionPrompt(
+        enabled: mode != 'driver',
+        child: LiveMeetingOverlay(
         service: service,
         child: mode == 'driver'
           ? _DriverShell(
@@ -878,6 +881,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
               initialPassengerLatitude: widget.initialPassengerLatitude,
               initialPassengerLongitude: widget.initialPassengerLongitude,
             ),
+      ),
       ),
     );
   }
