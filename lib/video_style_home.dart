@@ -17199,6 +17199,7 @@ class _OffersCardState extends State<_OffersCard> {
               currency: widget.ride['currency']?.toString() ?? 'BOB',
               remainingSeconds: _remainingSeconds(item),
               passengerFare: asDouble(widget.ride['proposed_fare']),
+              serviceKey: widget.ride['category']?.toString(),
               onAccept: () => widget.onOffer(item.offer),
               onReject: () => widget.onDecline(item.offer),
             ),
@@ -17372,6 +17373,7 @@ class _PassengerDriverOfferCard extends StatelessWidget {
   final String currency;
   final int remainingSeconds;
   final double? passengerFare;
+  final String? serviceKey;
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
@@ -17380,6 +17382,7 @@ class _PassengerDriverOfferCard extends StatelessWidget {
     required this.currency,
     required this.remainingSeconds,
     required this.passengerFare,
+    this.serviceKey,
     required this.onAccept,
     required this.onReject,
   });
@@ -17531,6 +17534,26 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 10.5,
+                        ),
+                      ),
+                    if (serviceKey == 'motorcycle_comfort')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.beach_access_rounded,
+                                size: 14, color: expressBlue),
+                            SizedBox(width: 4),
+                            Text(
+                              'Moto Confort · con sombrilla',
+                              style: TextStyle(
+                                color: expressBlue,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                   ],
@@ -19003,6 +19026,28 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (trip['ride_requests'] is Map &&
+                          (trip['ride_requests'] as Map)['category'] ==
+                              'motorcycle_comfort')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.beach_access_rounded,
+                                  size: 14, color: expressBlue),
+                              SizedBox(width: 4),
+                              Text(
+                                'Moto Confort · con sombrilla',
+                                style: TextStyle(
+                                  color: expressBlue,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
