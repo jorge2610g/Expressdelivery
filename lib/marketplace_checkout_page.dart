@@ -574,12 +574,12 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                                 ? Icons.qr_code_2_rounded
                                 : Icons.account_balance_rounded,
                             title: previewQr
-                                ? 'QR de prueba'
+                                ? 'QR de demostración'
                                 : bolivianQr
                                     ? 'QR Global'
                                     : 'Transferencia',
                             subtitle: previewQr
-                                ? 'Prueba el flujo de pago en Preview. No se hará ningún cobro real.'
+                                ? 'Pago de demostración. No se hará ningún cobro real.'
                                 : bolivianQr
                                     ? 'Paga con QR Global de VeriPagos.'
                                     : 'El comercio confirma tu comprobante dentro del pedido.',

@@ -432,7 +432,7 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
                           ),
                           const SizedBox(height: 10),
                           const Text(
-                            'No entraremos a la aplicación hasta confirmar que tu cuenta corresponde al entorno correcto.',
+                            'Estamos verificando tu cuenta. Inténtalo nuevamente en unos segundos.',
                             textAlign: TextAlign.center,
                           ),
                           if (ExpressRuntimeChannel.previewMode) ...[
@@ -478,16 +478,10 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
 
         final boundEnvironment = access['bound_environment']?.toString();
         final preview = ExpressRuntimeChannel.previewMode;
-        final title = preview
-            ? 'Cuenta vinculada a Producción'
-            : 'Cuenta vinculada a Preview';
-        final message = preview
-            ? boundEnvironment == 'production'
-                ? 'Esta cuenta ya pertenece a Producción. Para probar Express Preview usa otra cuenta Google destinada a pruebas.'
-                : 'Esta cuenta todavía no está habilitada para Express Preview.'
-            : boundEnvironment == 'preview'
-                ? 'Esta cuenta está reservada para Express Preview y no puede usar datos de Producción.'
-                : 'No pudimos confirmar el entorno de esta cuenta.';
+        final title = 'Cuenta no disponible';
+        final message = boundEnvironment == null
+            ? 'No pudimos verificar tu cuenta. Inténtalo nuevamente.'
+            : 'Esta cuenta no está habilitada para esta aplicación. Usa otra cuenta.';
 
         return Scaffold(
           body: SafeArea(

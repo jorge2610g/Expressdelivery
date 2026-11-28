@@ -295,13 +295,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
 
     if (allowed) return true;
 
-    final boundEnvironment = scope['bound_environment']?.toString();
     await supabase.auth.signOut();
     ExpressRuntimeChannel.resetForSignedOutUser();
     _message(
-      boundEnvironment == 'preview'
-          ? 'Esta cuenta de prueba no está activa para Express.'
-          : 'Esta cuenta no está habilitada para esta aplicación.',
+      'Esta cuenta no está habilitada para esta aplicación.',
     );
     return false;
   }
