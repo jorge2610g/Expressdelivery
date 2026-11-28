@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import 'benefits_service.dart';
 import 'benefit_audience_label.dart';
-import 'core/runtime_channel.dart';
 import 'money_format.dart';
 
 class BenefitsPage extends StatefulWidget {
@@ -701,10 +700,6 @@ class _BenefitsPageState extends State<BenefitsPage> {
                       trailing: Text(expressMoney(item['amount'], data['currency']?.toString() ?? 'BOB')),
                     )),
               ],
-              const SizedBox(height: 12),
-              Text('Entorno ${ExpressRuntimeChannel.name == 'preview' ? 'de prueba' : 'de producción'}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF98A2B3), fontSize: 11)),
             ]),
           );
         },

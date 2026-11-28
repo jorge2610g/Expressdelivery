@@ -2048,7 +2048,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                                       : zoneCurrency == 'BOB'
                                           ? 'Pagar deuda con VeriPagos'
                                           : 'Pagar deuda'
-                                  : 'Simular pago en Prueba',
+                                  : 'Simular pago',
                             ),
                           ),
                           if (widget.service.runtimeChannel != 'production')
@@ -2109,7 +2109,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                             label: Text(
                               widget.service.runtimeChannel == 'production'
                                   ? 'Pagar ajuste pendiente'
-                                  : 'Simular pago en Prueba',
+                                  : 'Simular pago',
                             ),
                           ),
                           if (widget.service.runtimeChannel != 'production')
