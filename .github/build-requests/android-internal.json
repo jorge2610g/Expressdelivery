@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 180,
-  "changelog": "Express 1.6.9 build 180 para Prueba interna. Conductor: solicitud de precio fijo y de oferta rediseñadas con cuenta atrás (15 s), contraoferta en dos pasos, reintento de búsqueda a los mismos conductores y Campeonato Express con reglas, metas del mes (50, 30 y 10 viajes), tarjeta Tu mes y aceptación de reglas. Pasajero: tarjeta de precio fijo compacta sin barra de cálculo, envíos con tarifa por vehículo, aviso de teléfono ya registrado, aviso para activar notificaciones y fidelidad con barra de avance. Incluye los cambios de la 179. Solo Prueba interna; QA manual de dispositivo pendiente."
+  "build_number": 181,
+  "changelog": "Express 1.6.9 build 181 para Prueba interna. Conductor: solicitud de precio fijo que aparece al instante y con contadores sincronizados, elección de Moto Express o Moto Plus al conectarse (6:00 a 18:00) con etiqueta de modo, cambio de modo, aviso a las 18:00 y reglas de la sombrilla con 3 oportunidades. Pasajero: servicio Moto Plus con descripción, pregunta de sombrilla al terminar, nueva tarjeta compacta mientras el conductor responde (foto, color, placa y reloj de 3 minutos, con aviso de conductor no disponible) y sin menciones a entornos de prueba o producción. Incluye los cambios de la 180. Solo Prueba interna; QA manual de dispositivo pendiente."
 }
