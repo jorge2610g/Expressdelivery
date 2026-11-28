@@ -182,6 +182,157 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     }
   }
 
+  /// Barra compacta: título, conductor con foto, vehículo y reloj grande a la
+  /// derecha, la barra del turno del conductor y «Cancelar viaje» abajo.
+  Widget _buildCompact({
+    required Map<String, dynamic> shown,
+    required String title,
+    required String subtitle,
+    required bool showLost,
+    required bool showClock,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurface.withValues(alpha: .62);
+    final amber = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFF79009)
+        : const Color(0xFFB54708);
+    final colorText = (shown['vehicle_color'] ?? '').toString().trim();
+    final plate = (shown['vehicle_plate'] ?? '').toString().trim();
+    final kind = shown['vehicle_type']?.toString() == 'car' ||
+            shown['vehicle_type']?.toString() == 'xl'
+        ? 'Auto'
+        : 'Moto';
+    final vehicleLabel = [
+      colorText.isEmpty ? kind : '$kind ${colorText.toLowerCase()}',
+      if (plate.isNotEmpty) plate.toUpperCase(),
+    ].join(' · ');
+    final dotColor =
+        expressVehicleColorFromText(colorText) ?? const Color(0xFF98A2B3);
+    final clockSeconds = _windowEnd != null ? _windowLeft : _secondsLeft;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: showLost ? amber : muted)),
+        const SizedBox(height: 12),
+        Opacity(
+          opacity: showLost ? .55 : 1,
+          child: Row(
+            children: [
+              ExpressDriverPortrait(
+                key: ValueKey('fixed-${shown['driver_id']}'),
+                driverId: shown['driver_id']?.toString(),
+                approvedPath: shown['profile_photo_path']?.toString(),
+                fallbackUrl: shown['avatar_url']?.toString(),
+                radius: 25,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${shown['full_name'] ?? 'Conductor'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (shown['rating'] != null) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.star_rounded,
+                              size: 16, color: Color(0xFFFDB022)),
+                          const SizedBox(width: 2),
+                          Text((shown['rating'] as num).toStringAsFixed(2),
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: muted)),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: dotColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white24),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(vehicleLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, color: muted)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (showClock)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(fixedDispatchClock(clockSeconds),
+                      key: const ValueKey('fixed-window-clock'),
+                      style: const TextStyle(
+                          fontSize: 26, fontWeight: FontWeight.w800)),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: showLost
+              ? LinearProgressIndicator(
+                  minHeight: 4,
+                  color: amber,
+                  backgroundColor: scheme.onSurface.withValues(alpha: .12))
+              : LinearProgressIndicator(
+                  value: _secondsLeft <= 0
+                      ? 0
+                      : (_secondsLeft / _perDriverTotal).clamp(0.0, 1.0),
+                  minHeight: 4,
+                ),
+        ),
+        const SizedBox(height: 10),
+        Text(subtitle, style: TextStyle(fontSize: 13, color: muted)),
+        Align(
+          alignment: Alignment.centerRight,
+          child: InkWell(
+            onTap: widget.onCancel,
+            borderRadius: BorderRadius.circular(8),
+            child: const Padding(
+              padding: EdgeInsets.fromLTRB(8, 10, 2, 4),
+              child: Text('Cancelar viaje',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ),
+        if (_failed)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Reconectando…', style: TextStyle(fontSize: 12)),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = _state['current'] is Map
@@ -211,6 +362,16 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
       // Nadie disponible por ahora: seguimos esperando a que se conecte alguien.
       title = 'Buscando conductor cerca de ti';
       subtitle = 'Te avisamos en cuanto un conductor tome tu viaje';
+    }
+
+    if (shown != null && !exhausted) {
+      return _buildCompact(
+        shown: shown,
+        title: title,
+        subtitle: subtitle,
+        showLost: showLost,
+        showClock: _windowEnd != null || current != null,
+      );
     }
 
     return Column(
