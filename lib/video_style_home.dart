@@ -4384,6 +4384,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     _maybePromptSearchRenewal(next);
 
+    // Si quedó pendiente la pregunta de la sombrilla de un viaje Moto Confort
+    // (por ejemplo, se cerró la app antes de responder), se vuelve a hacer
+    // cuando el pasajero está libre.
+    if (openRide == null &&
+        activeTrip == null &&
+        activeDelivery == null &&
+        pendingRating == null) {
+      unawaited(_askUmbrellaIfPending());
+    }
+
     return next;
   }
 
