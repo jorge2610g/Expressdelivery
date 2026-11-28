@@ -37,7 +37,7 @@ void main() {
   test('la tarjeta ofrece volver a buscar cuando nadie acepta', () {
     final card = File('lib/fixed_dispatch_search_card.dart').readAsStringSync();
     expect(card, contains('Seguir buscando'));
-    expect(card, contains('Esperando que el conductor acepte'));
+    expect(card, contains('El conductor está respondiendo'));
     expect(card, contains('Este conductor no está disponible'));
     expect(card, contains('restartFixedDispatch'));
   });

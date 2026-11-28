@@ -205,7 +205,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
       title = 'Este conductor no está disponible';
       subtitle = 'Ya estamos buscando otro conductor';
     } else if (current != null) {
-      title = 'Esperando que el conductor acepte';
+      title = 'El conductor está respondiendo';
       subtitle = 'Tiene unos segundos para aceptar tu viaje';
     } else {
       // Nadie disponible por ahora: seguimos esperando a que se conecte alguien.
