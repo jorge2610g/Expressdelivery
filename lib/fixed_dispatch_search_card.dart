@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'driver_portrait.dart';
+import 'vehicle_color_badge.dart';
 import 'services/express_service.dart';
 
 /// Texto de la cuenta regresiva `00:15`.
@@ -62,6 +63,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   bool _expiredNotified = false;
   bool _restarting = false;
   bool _failed = false;
+  // Último conductor al que se le ofreció el viaje y, si dejó de estar
+  // disponible, se muestra unos segundos como «no está disponible».
+  Map<String, dynamic>? _lastCurrent;
+  Map<String, dynamic>? _lost;
+  DateTime? _lostUntil;
+  static const Set<String> _searchingStatuses = {'pending', 'searching', 'offers_received'};
 
   String get _rideId => widget.ride['id']?.toString() ?? '';
 
@@ -126,6 +133,14 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
         _advancedNotified = true;
         widget.onAdvanced?.call();
       }
+      final newCurrent = current is Map ? Map<String, dynamic>.from(current) : null;
+      if (_lastCurrent != null &&
+          _lastCurrent!['driver_id']?.toString() != newCurrent?['driver_id']?.toString() &&
+          (rideStatus == null || _searchingStatuses.contains(rideStatus))) {
+        _lost = _lastCurrent;
+        _lostUntil = DateTime.now().add(const Duration(seconds: 4));
+      }
+      _lastCurrent = newCurrent;
       setState(() {
         _state = state;
         _failed = false;
@@ -172,10 +187,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     final current = _state['current'] is Map
         ? Map<String, dynamic>.from(_state['current'] as Map)
         : null;
-    final previous = _state['previous'] is Map
-        ? Map<String, dynamic>.from(_state['previous'] as Map)
-        : null;
     final exhausted = _state['exhausted'] == true && current == null;
+    final showLost = !exhausted &&
+        _lost != null &&
+        _lostUntil != null &&
+        DateTime.now().isBefore(_lostUntil!);
+    final shown = showLost ? _lost : current;
 
     late final String title;
     late final String subtitle;
@@ -184,8 +201,11 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
       title = '¿Seguimos buscando conductor?';
       subtitle = 'Pasaron 3 minutos y ningún conductor tomó tu viaje. '
           'Puedes buscar otros 3 minutos o cancelar el viaje.';
+    } else if (showLost) {
+      title = 'Este conductor no está disponible';
+      subtitle = 'Ya estamos buscando otro conductor';
     } else if (current != null) {
-      title = 'El conductor está respondiendo';
+      title = 'Esperando que el conductor acepte';
       subtitle = 'Tiene unos segundos para aceptar tu viaje';
     } else {
       // Nadie disponible por ahora: seguimos esperando a que se conecte alguien.
@@ -204,35 +224,30 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
                   style: const TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w900)),
             ),
-            if (current != null)
-              Text(fixedDispatchClock(_secondsLeft),
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800))
-            else if (!exhausted && _windowEnd != null)
+            // El reloj de arriba es siempre el de los 3 minutos de búsqueda,
+            // aunque cada conductor solo tenga unos segundos para responder.
+            if (!exhausted && _windowEnd != null)
               Text(fixedDispatchClock(_windowLeft),
                   key: const ValueKey('fixed-window-clock'),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800))
+            else if (current != null)
+              Text(fixedDispatchClock(_secondsLeft),
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w800)),
           ],
         ),
         const SizedBox(height: 2),
         Text(subtitle, style: const TextStyle(fontSize: 12.5)),
-        if (current != null && previous != null) ...[
-          const SizedBox(height: 4),
-          const Text(
-            'El conductor anterior no estaba disponible. Ya estamos buscando otro.',
-            style: TextStyle(fontSize: 12, color: Color(0xFFB54708)),
-          ),
-        ],
-        if (current != null) ...[
+        if (shown != null && !exhausted) ...[
           const SizedBox(height: 12),
           Row(
             children: [
               ExpressDriverPortrait(
-                key: ValueKey('fixed-${current['driver_id']}'),
-                driverId: current['driver_id']?.toString(),
-                approvedPath: current['profile_photo_path']?.toString(),
-                fallbackUrl: current['avatar_url']?.toString(),
+                key: ValueKey('fixed-${shown['driver_id']}'),
+                driverId: shown['driver_id']?.toString(),
+                approvedPath: shown['profile_photo_path']?.toString(),
+                fallbackUrl: shown['avatar_url']?.toString(),
                 radius: 26,
               ),
               const SizedBox(width: 12),
@@ -241,28 +256,36 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${current['full_name'] ?? 'Conductor'}'
-                      '${current['rating'] != null ? '  ★ ${(current['rating'] as num).toStringAsFixed(2)}' : ''}',
+                      '${shown['full_name'] ?? 'Conductor'}'
+                      '${shown['rating'] != null ? '  ★ ${(shown['rating'] as num).toStringAsFixed(2)}' : ''}',
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w800),
                     ),
-                    if ((current['vehicle_summary'] ?? '').toString().isNotEmpty)
-                      Text(current['vehicle_summary'].toString(),
+                    if ((shown['vehicle_summary'] ?? '').toString().isNotEmpty)
+                      Text(shown['vehicle_summary'].toString(),
                           style: const TextStyle(fontSize: 12.5)),
                   ],
                 ),
+              ),
+              const SizedBox(width: 10),
+              // La moto (o el auto) lleva el color que el conductor indicó.
+              ExpressVehicleColorBadge(
+                vehicleType: shown['vehicle_type']?.toString(),
+                colorText: shown['vehicle_color']?.toString(),
               ),
             ],
           ),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: _secondsLeft <= 0
-                  ? 0
-                  : (_secondsLeft / _perDriverTotal).clamp(0.0, 1.0),
-              minHeight: 5,
-            ),
+            child: showLost
+                ? const LinearProgressIndicator(minHeight: 5)
+                : LinearProgressIndicator(
+                    value: _secondsLeft <= 0
+                        ? 0
+                        : (_secondsLeft / _perDriverTotal).clamp(0.0, 1.0),
+                    minHeight: 5,
+                  ),
           ),
         ] else if (!exhausted) ...[
           const SizedBox(height: 12),
