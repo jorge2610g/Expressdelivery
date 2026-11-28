@@ -101,8 +101,8 @@ const List<Map<String, dynamic>> _fallbackRideServices = [
 
 /// Texto de la categoría de una solicitud en las tarjetas del conductor.
 String _rideCategoryLabel(String? category) {
-  if (category == 'motorcycle_comfort') return 'Moto Confort';
-  if (category == 'motorcycle') return 'Moto Económico';
+  if (category == 'motorcycle_comfort') return 'Moto Plus';
+  if (category == 'motorcycle') return 'Moto Express';
   return category ?? 'Viaje';
 }
 
@@ -3945,7 +3945,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   final Set<String> _umbrellaAskedTrips = <String>{};
 
-  /// Tras un viaje de Moto Confort pregunta al pasajero si el conductor tenía
+  /// Tras un viaje de Moto Plus pregunta al pasajero si el conductor tenía
   /// sombrilla. «No tenía» se reporta al servidor, que avisa al conductor.
   Future<void> _askUmbrellaIfPending() async {
     try {
@@ -3959,7 +3959,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         builder: (dialogContext) => AlertDialog(
           title: const Text('¿El conductor tenía sombrilla?'),
           content: const Text(
-            'Pediste Moto Confort. Tu respuesta ayuda a que el servicio sea '
+            'Pediste Moto Plus. Tu respuesta ayuda a que el servicio sea '
             'confiable. Si dices que no tenía, revisamos al conductor.',
           ),
           actions: [
@@ -4385,7 +4385,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     _maybePromptSearchRenewal(next);
 
-    // Si quedó pendiente la pregunta de la sombrilla de un viaje Moto Confort
+    // Si quedó pendiente la pregunta de la sombrilla de un viaje Moto Plus
     // (por ejemplo, se cerró la app antes de responder), se vuelve a hacer
     // cuando el pasajero está libre.
     if (openRide == null &&
@@ -5208,12 +5208,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
         return;
       }
-      if (e.toString().contains('Moto Confort está disponible')) {
+      if ((e.toString().contains('Moto Plus está disponible') ||
+          e.toString().contains('Moto Confort está disponible'))) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Moto Confort está disponible de 6:00 a 18:00. '
-              'Puedes pedir Moto Económico.',
+              'Moto Plus está disponible de 6:00 a 18:00. '
+              'Puedes pedir Moto Express.',
             ),
           ),
         );
@@ -8717,7 +8718,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       final raw = await supabase.rpc('driver_moto_mode_status_v1');
       if (raw is! Map || !mounted) return;
       var status = Map<String, dynamic>.from(raw);
-      // Terminó el horario de Moto Confort: pasa solo a Económico sin
+      // Terminó el horario de Moto Plus: pasa solo a Económico sin
       // desconectarlo y se lo avisamos.
       if (status['mode'] == 'comfort' && status['window_open'] != true) {
         try {
@@ -8746,10 +8747,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(blocked
-              ? 'Moto Confort está inhabilitado para tu cuenta. Contacta a soporte.'
+              ? 'Moto Plus está inhabilitado para tu cuenta. Contacta a soporte.'
               : suspended
-                  ? 'Moto Confort vuelve mañana desde las 6:00.'
-                  : 'Moto Confort está disponible de 6:00 a 18:00.'),
+                  ? 'Moto Plus vuelve mañana desde las 6:00.'
+                  : 'Moto Plus está disponible de 6:00 a 18:00.'),
         ));
       return;
     }
@@ -10173,8 +10174,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   /// Pregunta cómo se conecta un conductor de moto cuando su ciudad tiene
-  /// Moto Confort. Devuelve false si cancela la conexión. Si algo falla, el
-  /// conductor se conecta como Moto Económico.
+  /// Moto Plus. Devuelve false si cancela la conexión. Si algo falla, el
+  /// conductor se conecta como Moto Express.
   Future<bool> _chooseMotoMode() async {
     Map<String, dynamic> status;
     try {
@@ -10211,14 +10212,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Moto Confort se ofrece de 6:00 a 18:00.'),
+                const Text('Moto Plus se ofrece de 6:00 a 18:00.'),
                 const SizedBox(height: 10),
                 RadioListTile<bool>(
                   contentPadding: EdgeInsets.zero,
                   value: false,
                   groupValue: comfort,
                   onChanged: (v) => setLocal(() => comfort = v == true),
-                  title: const Text('Moto Económico'),
+                  title: const Text('Moto Express'),
                   subtitle: const Text('Con o sin sombrilla. Precio económico.'),
                 ),
                 RadioListTile<bool>(
@@ -10226,9 +10227,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   value: true,
                   groupValue: comfort,
                   onChanged: (v) => setLocal(() => comfort = v == true),
-                  title: const Text('Moto Confort'),
+                  title: const Text('Moto Plus'),
                   subtitle: const Text(
-                      'Solo si tu moto tiene sombrilla. Tarifa de confort.'),
+                      'Solo si tu moto tiene sombrilla. Tarifa Plus.'),
                 ),
                 if (comfort) ...[
                   const SizedBox(height: 8),
@@ -10239,9 +10240,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text(
-                      'Regla de Moto Confort: si un pasajero reporta que tu '
+                      'Regla de Moto Plus: si un pasajero reporta que tu '
                       'moto no tenía sombrilla, tu cuenta puede quedar '
-                      'inhabilitada para Moto Confort. Verifica que la tengas '
+                      'inhabilitada para Moto Plus. Verifica que la tengas '
                       'antes de conectarte.',
                       style: TextStyle(fontSize: 12.5),
                     ),
@@ -10271,8 +10272,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   : () => Navigator.pop(
                       dialogContext, comfort ? 'comfort' : 'economy'),
               child: Text(comfort
-                  ? 'Conectarme como Moto Confort'
-                  : 'Conectarme como Moto Económico'),
+                  ? 'Conectarme como Moto Plus'
+                  : 'Conectarme como Moto Express'),
             ),
           ],
         ),
@@ -10288,7 +10289,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
             content: Text(choice == 'comfort'
-                ? 'No se pudo activar Moto Confort. Inténtalo de nuevo.'
+                ? 'No se pudo activar Moto Plus. Inténtalo de nuevo.'
                 : 'No se pudo guardar tu modo. Inténtalo de nuevo.'),
           ));
       }
@@ -10380,7 +10381,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           return;
         }
 
-        // Moto Económico o Moto Confort (con sombrilla): se pregunta al conectar.
+        // Moto Express o Moto Plus (con sombrilla): se pregunta al conectar.
         if (!await _chooseMotoMode()) {
           if (mounted) setState(() => busy = false);
           return;
@@ -12735,9 +12736,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                   child: const Text(
-                                    'Terminó el horario de Moto Confort. Sigues en '
-                                    'línea como Moto Económico. Mañana desde las '
-                                    '6:00 puedes volver a Confort.',
+                                    'Terminó el horario de Moto Plus. Sigues en '
+                                    'línea como Moto Express. Mañana desde las '
+                                    '6:00 puedes volver a Plus.',
                                     style: TextStyle(
                                         color: Colors.white, fontSize: 12),
                                   ),
@@ -15477,8 +15478,8 @@ class _RideServiceSlots extends StatelessWidget {
 
     if (visible.isEmpty) return const SizedBox.shrink();
 
-    // Descripción corta del servicio elegido (por ejemplo Moto Económico o
-    // Moto Confort), debajo de los botones.
+    // Descripción corta del servicio elegido (por ejemplo Moto Express o
+    // Moto Plus), debajo de los botones.
     Map<String, dynamic>? picked;
     for (final service in visible) {
       if (service['service_key']?.toString() == selectedKey) picked = service;
@@ -17656,7 +17657,7 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                                 size: 14, color: expressBlue),
                             SizedBox(width: 4),
                             Text(
-                              'Moto Confort · con sombrilla',
+                              'Moto Plus · con sombrilla',
                               style: TextStyle(
                                 color: expressBlue,
                                 fontSize: 11,
@@ -19148,7 +19149,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                                   size: 14, color: expressBlue),
                               SizedBox(width: 4),
                               Text(
-                                'Moto Confort · con sombrilla',
+                                'Moto Plus · con sombrilla',
                                 style: TextStyle(
                                   color: expressBlue,
                                   fontSize: 11,
@@ -19890,12 +19891,12 @@ class _MotoModePill extends StatelessWidget {
             ? Colors.white
             : const Color(0xFF3A2A00);
     final label = blocked
-        ? 'Confort inhabilitado'
+        ? 'Plus inhabilitado'
         : suspended
-            ? 'Confort vuelve mañana 6:00'
+            ? 'Plus vuelve mañana 6:00'
             : comfort
-                ? 'Modo Confort'
-                : 'Modo Económico';
+                ? 'Modo Plus'
+                : 'Modo Express';
     return Material(
       elevation: 4,
       color: bg,
