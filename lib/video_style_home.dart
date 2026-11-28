@@ -8740,12 +8740,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
   Future<void> _onMotoModePillTap() async {
     if (motoModeStatus['can_choose'] != true) {
       final blocked = motoModeStatus['blocked'] == true;
+      final suspended = motoModeStatus['suspended'] == true;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(blocked
-              ? 'Moto Confort está inhabilitado para tu cuenta.'
-              : 'Moto Confort está disponible de 6:00 a 18:00.'),
+              ? 'Moto Confort está inhabilitado para tu cuenta. Contacta a soporte.'
+              : suspended
+                  ? 'Moto Confort vuelve mañana desde las 6:00.'
+                  : 'Moto Confort está disponible de 6:00 a 18:00.'),
         ));
       return;
     }
@@ -12712,6 +12715,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                 left: 0,
                                 child: _MotoModePill(
                                   comfort: motoModeStatus['mode'] == 'comfort',
+                                  blocked: motoModeStatus['blocked'] == true,
+                                  suspended: motoModeStatus['suspended'] == true,
                                   onTap: _onMotoModePillTap,
                                 ),
                               ),
@@ -19859,14 +19864,37 @@ class _CircleButton extends StatelessWidget {
 /// Económico (dorada). Al tocarla se puede cambiar de modo.
 class _MotoModePill extends StatelessWidget {
   final bool comfort;
+  final bool blocked;
+  final bool suspended;
   final VoidCallback onTap;
 
-  const _MotoModePill({required this.comfort, required this.onTap});
+  const _MotoModePill({
+    required this.comfort,
+    required this.onTap,
+    this.blocked = false,
+    this.suspended = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final bg = comfort ? const Color(0xFF2E90FA) : const Color(0xFFF5C451);
-    final fg = comfort ? Colors.white : const Color(0xFF3A2A00);
+    final off = blocked || suspended;
+    final bg = off
+        ? const Color(0xFF475467)
+        : comfort
+            ? const Color(0xFF2E90FA)
+            : const Color(0xFFF5C451);
+    final fg = off
+        ? Colors.white
+        : comfort
+            ? Colors.white
+            : const Color(0xFF3A2A00);
+    final label = blocked
+        ? 'Confort inhabilitado'
+        : suspended
+            ? 'Confort vuelve mañana 6:00'
+            : comfort
+                ? 'Modo Confort'
+                : 'Modo Económico';
     return Material(
       elevation: 4,
       color: bg,
@@ -19880,13 +19908,17 @@ class _MotoModePill extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                comfort ? Icons.beach_access_rounded : Icons.two_wheeler_rounded,
+                off
+                    ? Icons.block_rounded
+                    : comfort
+                        ? Icons.beach_access_rounded
+                        : Icons.two_wheeler_rounded,
                 size: 16,
                 color: fg,
               ),
               const SizedBox(width: 5),
               Text(
-                comfort ? 'Modo Confort' : 'Modo Económico',
+                label,
                 style: TextStyle(
                   color: fg,
                   fontSize: 12,
