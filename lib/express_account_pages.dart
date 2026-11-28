@@ -124,7 +124,7 @@ String _hubServiceLabel(Object? value) {
     case 'motorcycle':
       return 'Moto Express';
     case 'motorcycle_comfort':
-      return 'Moto Confort';
+      return 'Moto Plus';
     default:
       return 'Viaje Express';
   }
