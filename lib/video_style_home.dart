@@ -102,6 +102,7 @@ const List<Map<String, dynamic>> _fallbackRideServices = [
 /// Texto de la categoría de una solicitud en las tarjetas del conductor.
 String _rideCategoryLabel(String? category) {
   if (category == 'motorcycle_comfort') return 'Moto Confort';
+  if (category == 'motorcycle') return 'Moto Económico';
   return category ?? 'Viaje';
 }
 
